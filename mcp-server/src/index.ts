@@ -88,10 +88,10 @@ function startMetricsServer() {
     res.set('Content-Type', registry.contentType);
     res.end(await registry.metrics());
   });
-  const server = metricsApp.listen(9091, () => {
+  const metricsServer = metricsApp.listen(9091, () => {
     console.error('Metrics server listening on :9091');
   });
-  return { app: metricsApp, server };
+  return { app: metricsApp, metricsServer };
 }
 
 // Start server
