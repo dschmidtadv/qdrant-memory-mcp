@@ -6,6 +6,9 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'nomic-embed-text:latest';
 const NODE_ENV = process.env.NODE_ENV || 'local';
 
+// Environment-specific vector dimensions
+const VECTOR_SIZE = NODE_ENV === 'production' ? 1024 : 768;
+
 export async function getEmbedding(text: string): Promise<number[]> {
   if (NODE_ENV === 'local') {
     return getOllamaEmbedding(text);
@@ -38,13 +41,17 @@ async function getBedrockEmbedding(text: string): Promise<number[]> {
   try {
     const command = new InvokeModelCommand({
       modelId: model,
-      body: JSON.stringify({ inputText: text })
+      body: JSON.stringify({
+        inputText: text,
+        dimensions: VECTOR_SIZE
+      })
     });
     const response = await client.send(command);
     const result = JSON.parse(new TextDecoder().decode(response.body));
     
-    // Normalize 1024-dim to 768-dim (truncate)
-    return result.embedding.slice(0, 768);
+    // Return full embedding without truncation
+    // Production uses 1024-dim (Bedrock native), local uses 768-dim (Ollama native)
+    return result.embedding;
   } catch (error) {
     console.error('Bedrock embedding failed:', error);
     throw new Error('Failed to generate embedding');
@@ -54,5 +61,7 @@ async function getBedrockEmbedding(text: string): Promise<number[]> {
 }
 
 export function validateEmbedding(embedding: number[]): boolean {
-  return embedding.length === 768 && embedding.every(v => typeof v === 'number');
+  // Accept both 768-dim (local) and 1024-dim (production)
+  const validDimensions = [768, 1024];
+  return validDimensions.includes(embedding.length) && embedding.every(v => typeof v === 'number');
 }

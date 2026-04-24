@@ -7,10 +7,7 @@ const COLLECTION_NAME = process.env.NODE_ENV === 'production'
   ? 'agent-memory-prod' 
   : 'agent-memory';
 
-// Keep the collection schema aligned with the actual embedding length used by the app.
-// getBedrockEmbedding() currently produces 768-dimensional vectors, so Qdrant must
-// be initialized with the same size in every environment.
-const VECTOR_SIZE = 768;
+const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
 
 console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
 console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
@@ -25,10 +22,10 @@ export async function initializeQdrant(): Promise<void> {
     const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
     
     if (!exists) {
-      // Create collection
+      // Create collection with environment-specific vector size
       await client.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: 768,
+          size: VECTOR_SIZE,
           distance: 'Cosine'
         },
         hnsw_config: {

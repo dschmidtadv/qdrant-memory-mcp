@@ -79,8 +79,10 @@ export function chunkBySentences(
         startIndex,
         endIndex: startIndex + currentChunk.length
       });
-      startIndex += currentChunk.length;
-      currentChunk = sentence;
+      
+      // Start new chunk with overlap (15%)
+      const overlapText = currentChunk.slice(-Math.floor(currentChunk.length * 0.15));
+      currentChunk = overlapText + paragraph;
     } else {
       currentChunk += sentence;
     }
