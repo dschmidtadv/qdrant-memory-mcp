@@ -7,7 +7,10 @@ const COLLECTION_NAME = process.env.NODE_ENV === 'production'
   ? 'agent-memory-prod' 
   : 'agent-memory';
 
-const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
+// Keep the collection schema aligned with the actual embedding length used by the app.
+// getBedrockEmbedding() currently produces 768-dimensional vectors, so Qdrant must
+// be initialized with the same size in every environment.
+const VECTOR_SIZE = 768;
 
 console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
 console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
