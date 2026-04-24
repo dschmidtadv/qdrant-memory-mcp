@@ -27,7 +27,6 @@ export function chunkText(text: string, targetTokens: number = 768): Chunk[] {
       });
       
       // Start new chunk with overlap (15%)
-      const overlapTokens = Math.floor(targetTokens * 0.15);
       const overlapText = currentChunk.slice(-Math.floor(currentChunk.length * 0.15));
       currentChunk = overlapText + paragraph;
     } else {

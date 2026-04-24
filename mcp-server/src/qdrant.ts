@@ -1,9 +1,17 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const COLLECTION_NAME = 'agent-memory';
+
+// Environment-aware collection configuration
+const COLLECTION_NAME = process.env.NODE_ENV === 'production' 
+  ? 'agent-memory-prod' 
+  : 'agent-memory';
+
+const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
 
 console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
+console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
+console.error(`Collection: ${COLLECTION_NAME} (${VECTOR_SIZE}-dim)`);
 
 const client = new QdrantClient({ url: QDRANT_URL });
 
@@ -14,10 +22,10 @@ export async function initializeQdrant(): Promise<void> {
     const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
     
     if (!exists) {
-      // Create collection
+      // Create collection with environment-specific vector size
       await client.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: 768,
+          size: VECTOR_SIZE,
           distance: 'Cosine'
         },
         hnsw_config: {
@@ -25,7 +33,7 @@ export async function initializeQdrant(): Promise<void> {
           ef_construct: 200
         }
       });
-      console.error(`Created collection: ${COLLECTION_NAME}`);
+      console.error(`Created collection: ${COLLECTION_NAME} (${VECTOR_SIZE}-dim)`);
     } else {
       console.error(`Collection ${COLLECTION_NAME} already exists`);
     }
@@ -106,3 +114,5 @@ export async function searchVectors(
     throw error;
   }
 }
+
+export { COLLECTION_NAME, VECTOR_SIZE };
