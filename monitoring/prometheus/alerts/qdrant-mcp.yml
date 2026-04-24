@@ -1,0 +1,82 @@
+groups:
+  - name: qdrant_mcp_critical
+    interval: 30s
+    rules:
+      - alert: QdrantDown
+        expr: up{job="qdrant"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Qdrant vector database is unreachable"
+          description: "Qdrant has been down for more than 1 minute. All memory operations will fail."
+          runbook: "https://github.com/qdrant-memory-mcp/runbooks/qdrant-down"
+
+      - alert: MCPServerDown
+        expr: up{job="mcp-server"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "MCP Server is unreachable"
+          description: "The MCP server has been down for 30 seconds. Agent memory tools are unavailable."
+
+  - name: qdrant_mcp_performance
+    interval: 60s
+    rules:
+      - alert: RecallLatencyHigh
+        expr: histogram_quantile(0.99, rate(mcp_recall_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "recall_context p99 latency exceeds 500ms"
+          description: "p99 recall latency is {{ $value | humanizeDuration }}. SLO target is 500ms."
+
+      - alert: EmbeddingLatencyHigh
+        expr: histogram_quantile(0.99, rate(mcp_embedding_duration_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Embedding generation p99 latency exceeds 200ms"
+          description: "p99 embedding latency is {{ $value | humanizeDuration }}."
+
+      - alert: ToolErrorRateHigh
+        expr: rate(mcp_tool_errors_total[5m]) / rate(mcp_tool_calls_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MCP tool error rate exceeds 1%"
+          description: "Error rate is {{ $value | humanizePercentage }}."
+
+  - name: qdrant_mcp_capacity
+    interval: 300s
+    rules:
+      - alert: QdrantMemoryHigh
+        expr: container_memory_usage_bytes{name="qdrant-local"} / container_spec_memory_limit_bytes{name="qdrant-local"} > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Qdrant container memory usage above 90%"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit."
+
+      - alert: QdrantDiskHigh
+        expr: qdrant_storage_disk_usage_bytes / qdrant_storage_disk_total_bytes > 0.8
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Qdrant disk usage above 80%"
+          description: "Disk usage is {{ $value | humanizePercentage }}."
+
+      - alert: OllamaDown
+        expr: up{job="ollama"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ollama embedding service is unreachable"
+          description: "Ollama has been down for 1 minute. Local embedding generation will fail."
