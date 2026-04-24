@@ -1,5 +1,4 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -7,6 +6,8 @@ import {
 import { initializeQdrant } from './qdrant.js';
 import { tools, handleMemorizeContext, handleRecallContext } from './tools.js';
 import { registry } from './metrics.js';
+import { setupStdioTransport } from './transports/stdio-transport.js';
+import { setupHttpTransport } from './transports/http-transport.js';
 import express from 'express';
 import dotenv from 'dotenv';
 
@@ -87,9 +88,10 @@ function startMetricsServer() {
     res.set('Content-Type', registry.contentType);
     res.end(await registry.metrics());
   });
-  metricsApp.listen(9091, () => {
+  const server = metricsApp.listen(9091, () => {
     console.error('Metrics server listening on :9091');
   });
+  return { app: metricsApp, server };
 }
 
 // Start server
@@ -99,11 +101,19 @@ async function main() {
     console.error('Qdrant initialized successfully');
 
     // Start metrics server
-    startMetricsServer();
+    const { app: metricsApp } = startMetricsServer();
 
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error('MCP Server connected via stdio transport');
+    // Select transport based on environment variable
+    const transportMode = process.env.TRANSPORT_MODE || 'stdio';
+    console.error(`Transport mode: ${transportMode}`);
+
+    if (transportMode === 'http') {
+      // Cloud deployment: HTTP transport
+      await setupHttpTransport(metricsApp, server);
+    } else {
+      // Local IDE: stdio transport (default)
+      await setupStdioTransport(server);
+    }
   } catch (error) {
     console.error('Failed to start MCP Server:', error);
     process.exit(1);
