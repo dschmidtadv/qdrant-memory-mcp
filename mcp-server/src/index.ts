@@ -104,7 +104,13 @@ async function main() {
     const { app: metricsApp } = startMetricsServer();
 
     // Select transport based on environment variable
-    const transportMode = process.env.TRANSPORT_MODE || 'stdio';
+    const rawTransportMode = (process.env.TRANSPORT_MODE ?? 'stdio').toLowerCase();
+    if (rawTransportMode !== 'stdio' && rawTransportMode !== 'http') {
+      throw new Error(
+        `Unsupported TRANSPORT_MODE: "${process.env.TRANSPORT_MODE}". Must be "stdio" or "http".`
+      );
+    }
+    const transportMode = rawTransportMode as 'stdio' | 'http';
     console.error(`Transport mode: ${transportMode}`);
 
     if (transportMode === 'http') {
