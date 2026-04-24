@@ -22,10 +22,10 @@ export async function initializeQdrant(): Promise<void> {
     const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
     
     if (!exists) {
-      // Create collection with environment-specific vector size
+      // Create collection
       await client.createCollection(COLLECTION_NAME, {
         vectors: {
-          size: VECTOR_SIZE,
+          size: 768,
           distance: 'Cosine'
         },
         hnsw_config: {
@@ -62,22 +62,36 @@ export async function searchVectors(
   tags?: string[]
 ): Promise<any[]> {
   try {
-    const filter = tags && tags.length > 0
-      ? {
-          must: [
-            { key: 'project', match: { value: project } },
-            { key: 'tags', match: { any: tags } }
-          ]
+    const filter: any = {
+      must: [
+        {
+          key: 'project',
+          match: { value: project }
         }
-      : { key: 'project', match: { value: project } };
-
-    const results = await client.search(COLLECTION_NAME, {
+      ]
+    };
+    
+    if (tags && tags.length > 0) {
+      filter.must.push({
+        key: 'tags',
+        match: { any: tags }
+      });
+    }
+    
+    const response: any = await client.search(COLLECTION_NAME, {
       vector: query,
       limit,
-      with_payload: true,
-      filter
+      filter,
+      with_payload: true
     });
-    return results;
+    
+    // Ensure we return an array of results
+    const results = Array.isArray(response) ? response : (response?.result || response?.results || []);
+    
+    return results.map((item: any) => ({
+      score: item.score || 0,
+      payload: item.payload || {}
+    }));
   } catch (error) {
     console.error('Failed to search vectors:', error);
     throw error;
