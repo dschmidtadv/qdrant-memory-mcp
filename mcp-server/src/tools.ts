@@ -4,7 +4,7 @@ import { upsertVectors, searchVectors } from './qdrant';
 import { chunkText } from './chunking';
 import { batchProcess } from './batching';
 import { v4 as uuidv4 } from 'uuid';
-import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics.js';
+import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics';
 
 export const tools: Tool[] = [
   {

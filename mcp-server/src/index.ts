@@ -3,11 +3,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { initializeQdrant } from './qdrant.js';
-import { tools, handleMemorizeContext, handleRecallContext } from './tools.js';
-import { registry } from './metrics.js';
-import { setupStdioTransport } from './transports/stdio-transport.js';
-import { setupHttpTransport } from './transports/http-transport.js';
+import { initializeQdrant } from './qdrant';
+import { tools, handleMemorizeContext, handleRecallContext } from './tools';
+import { registry } from './metrics';
+import { setupStdioTransport } from './transports/stdio-transport';
+import { setupHttpTransport } from './transports/http-transport';
 import express from 'express';
 import dotenv from 'dotenv';
 

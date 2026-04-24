@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { embeddingDuration } from './metrics.js';
+import { embeddingDuration } from './metrics';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'nomic-embed-text:latest';

@@ -42,8 +42,8 @@ export function chunkText(
       endIndex
     });
 
-    // Move start index forward, accounting for overlap
-    startIndex = endIndex - overlap;
+    // Move start index forward, accounting for overlap; clamp to 0
+    startIndex = Math.max(endIndex - overlap, 0);
 
     // Prevent infinite loop if overlap is too large
     if (startIndex <= chunks[chunks.length - 1].startIndex) {
@@ -72,12 +72,13 @@ export function chunkBySentences(
 
   for (const sentence of sentences) {
     if ((currentChunk + sentence).length > maxChunkSize && currentChunk.length > 0) {
+      const trimmedText = currentChunk.trim();
       chunks.push({
         id: `chunk-${chunks.length}`,
         index: chunks.length,
-        text: currentChunk.trim(),
+        text: trimmedText,
         startIndex,
-        endIndex: startIndex + currentChunk.length
+        endIndex: startIndex + trimmedText.length
       });
       
       // Advance startIndex past the chunk we just pushed, then start new chunk with overlap (15%)
@@ -90,12 +91,13 @@ export function chunkBySentences(
   }
 
   if (currentChunk.length > 0) {
+    const trimmedText = currentChunk.trim();
     chunks.push({
       id: `chunk-${chunks.length}`,
       index: chunks.length,
-      text: currentChunk.trim(),
+      text: trimmedText,
       startIndex,
-      endIndex: startIndex + currentChunk.length
+      endIndex: startIndex + trimmedText.length
     });
   }
 

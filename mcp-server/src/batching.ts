@@ -72,18 +72,17 @@ export async function batchProcessWithRetry<T, R>(
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     let retries = 0;
-    let success = false;
     let batchResults: R[] = [];
     
-    while (!success && retries < maxRetries) {
+    while (true) {
       try {
         batchResults = await Promise.all(
           batch.map(item => processor(item))
         );
-        success = true;
+        break;
       } catch (error) {
-        retries++;
         if (retries < maxRetries) {
+          retries++;
           const delay = Math.pow(2, retries) * 100; // Exponential backoff
           console.warn(`Batch retry ${retries}/${maxRetries} after ${delay}ms:`, error);
           await new Promise(resolve => setTimeout(resolve, delay));
