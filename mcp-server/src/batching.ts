@@ -15,6 +15,10 @@ export async function batchProcess<T, R>(
   processor: (item: T) => Promise<R>,
   batchSize: number = 5
 ): Promise<R[]> {
+  if (batchSize < 1) {
+    throw new Error(`batchSize must be >= 1, got ${batchSize}`);
+  }
+
   if (!items || items.length === 0) {
     return [];
   }
@@ -52,6 +56,13 @@ export async function batchProcessWithRetry<T, R>(
   batchSize: number = 5,
   maxRetries: number = 3
 ): Promise<R[]> {
+  if (batchSize < 1) {
+    throw new Error(`batchSize must be >= 1, got ${batchSize}`);
+  }
+  if (maxRetries < 0) {
+    throw new Error(`maxRetries must be >= 0, got ${maxRetries}`);
+  }
+
   if (!items || items.length === 0) {
     return [];
   }
