@@ -1,4 +1,5 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { Express } from 'express';
 import express from 'express';
 
 /**
@@ -10,7 +11,7 @@ import express from 'express';
  * StreamableHTTPServerTransport may not be available in SDK v1.0.0
  */
 export async function setupHttpTransport(
-  app: express.Express,
+  app: Express,
   server: Server
 ): Promise<void> {
   try {
