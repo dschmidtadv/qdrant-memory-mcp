@@ -2,8 +2,9 @@ import { Tool } from '@modelcontextprotocol/sdk/types';
 import { getEmbedding } from './embedding';
 import { upsertVectors, searchVectors } from './qdrant';
 import { chunkText } from './chunking';
+import { batchProcess } from './batching';
 import { v4 as uuidv4 } from 'uuid';
-import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics.js';
+import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics';
 
 export const tools: Tool[] = [
   {
@@ -69,23 +70,26 @@ export async function handleMemorizeContext(input: any): Promise<string> {
     // Chunk content
     const chunks = chunkText(content);
     
-    // Generate embeddings and prepare vectors
-    const vectors = [];
-    for (const chunk of chunks) {
-      const embedding = await getEmbedding(chunk.text);
-      vectors.push({
-        id: uuidv4(),
-        vector: embedding,
-        payload: {
-          project,
-          timestamp: Date.now(),
-          source: 'memorize_context',
-          tags,
-          chunk_index: chunk.index,
-          content: chunk.text
-        }
-      });
-    }
+    // Generate embeddings in parallel batches (batch size: 5 for Bedrock rate limit protection)
+    const embeddings = await batchProcess(
+      chunks,
+      chunk => getEmbedding(chunk.text),
+      5 // Batch size
+    );
+    
+    // Prepare vectors with embeddings
+    const vectors = chunks.map((chunk, index) => ({
+      id: uuidv4(),
+      vector: embeddings[index],
+      payload: {
+        project,
+        timestamp: Date.now(),
+        source: 'memorize_context',
+        tags,
+        chunk_index: chunk.index,
+        content: chunk.text
+      }
+    }));
     
     // Upsert to Qdrant
     const count = await upsertVectors(vectors);

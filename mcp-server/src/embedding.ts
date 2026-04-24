@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { embeddingDuration } from './metrics.js';
+import { embeddingDuration } from './metrics';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'nomic-embed-text:latest';
@@ -8,6 +8,9 @@ const NODE_ENV = process.env.NODE_ENV || 'local';
 
 // Environment-specific vector dimensions
 const VECTOR_SIZE = NODE_ENV === 'production' ? 1024 : 768;
+
+// Reuse a single Bedrock client instance to avoid per-call connection overhead
+const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 export async function getEmbedding(text: string): Promise<number[]> {
   if (NODE_ENV === 'local') {
@@ -35,7 +38,6 @@ async function getOllamaEmbedding(text: string): Promise<number[]> {
 
 async function getBedrockEmbedding(text: string): Promise<number[]> {
   const timer = embeddingDuration.startTimer({ provider: 'bedrock' });
-  const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
   const model = process.env.AWS_BEDROCK_MODEL || 'amazon.titan-embed-text-v2:0';
   
   try {
@@ -46,7 +48,7 @@ async function getBedrockEmbedding(text: string): Promise<number[]> {
         dimensions: VECTOR_SIZE
       })
     });
-    const response = await client.send(command);
+    const response = await bedrockClient.send(command);
     const result = JSON.parse(new TextDecoder().decode(response.body));
     
     // Return full embedding without truncation

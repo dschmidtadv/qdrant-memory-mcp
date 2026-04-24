@@ -1,54 +1,105 @@
-import { encodingForModel } from 'js-tiktoken';
-
-const enc = encodingForModel('gpt-3.5-turbo');
+/**
+ * Text chunking utilities for breaking down large documents
+ * into manageable pieces for embedding and storage
+ */
 
 export interface Chunk {
-  text: string;
-  tokens: number;
+  id: string;
   index: number;
+  text: string;
+  startIndex: number;
+  endIndex: number;
 }
 
-export function chunkText(text: string, targetTokens: number = 768): Chunk[] {
-  // Split on semantic boundaries
-  const paragraphs = text.split(/\n\n+/);
+/**
+ * Split text into chunks with overlap for better context preservation
+ * @param text - The text to chunk
+ * @param chunkSize - Target size of each chunk in characters
+ * @param overlap - Number of characters to overlap between chunks
+ * @returns Array of chunks with metadata
+ */
+export function chunkText(
+  text: string,
+  chunkSize: number = 1000,
+  overlap: number = 200
+): Chunk[] {
+  if (!text || text.length === 0) {
+    return [];
+  }
+
   const chunks: Chunk[] = [];
-  let currentChunk = '';
-  let chunkIndex = 0;
-  
-  for (const paragraph of paragraphs) {
-    const tokens = enc.encode(currentChunk + paragraph).length;
-    
-    if (tokens > targetTokens && currentChunk) {
-      // Save current chunk
-      chunks.push({
-        text: currentChunk.trim(),
-        tokens: enc.encode(currentChunk).length,
-        index: chunkIndex++
-      });
-      
-      // Start new chunk with overlap (15%)
-      const overlapText = currentChunk.slice(-Math.floor(currentChunk.length * 0.15));
-      currentChunk = overlapText + paragraph;
-    } else {
-      currentChunk += (currentChunk ? '\n\n' : '') + paragraph;
+  let startIndex = 0;
+
+  while (startIndex < text.length) {
+    const endIndex = Math.min(startIndex + chunkSize, text.length);
+    const chunkText = text.substring(startIndex, endIndex);
+
+    chunks.push({
+      id: `chunk-${chunks.length}`,
+      index: chunks.length,
+      text: chunkText,
+      startIndex,
+      endIndex
+    });
+
+    // Move start index forward, accounting for overlap; clamp to 0
+    startIndex = Math.max(endIndex - overlap, 0);
+
+    // Prevent infinite loop if overlap is too large
+    if (startIndex <= chunks[chunks.length - 1].startIndex) {
+      startIndex = endIndex;
     }
   }
-  
-  // Add final chunk
-  if (currentChunk.trim()) {
-    chunks.push({
-      text: currentChunk.trim(),
-      tokens: enc.encode(currentChunk).length,
-      index: chunkIndex
-    });
-  }
-  
+
   return chunks;
 }
 
-export function validateChunks(chunks: Chunk[]): boolean {
-  return chunks.every(chunk => {
-    const tokens = chunk.tokens;
-    return tokens >= 512 && tokens <= 1024;
-  });
+/**
+ * Split text by sentences for more semantic chunking
+ * @param text - The text to chunk
+ * @param maxChunkSize - Maximum characters per chunk
+ * @returns Array of chunks
+ */
+export function chunkBySentences(
+  text: string,
+  maxChunkSize: number = 1000
+): Chunk[] {
+  // Simple sentence splitting (can be improved with NLP)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const chunks: Chunk[] = [];
+  let currentChunk = '';
+  let startIndex = 0;
+
+  for (const sentence of sentences) {
+    if ((currentChunk + sentence).length > maxChunkSize && currentChunk.length > 0) {
+      const trimmedText = currentChunk.trim();
+      chunks.push({
+        id: `chunk-${chunks.length}`,
+        index: chunks.length,
+        text: trimmedText,
+        startIndex,
+        endIndex: startIndex + trimmedText.length
+      });
+      
+      // Advance startIndex past the chunk we just pushed, then start new chunk with overlap (15%)
+      startIndex += currentChunk.length;
+      const overlapText = currentChunk.slice(-Math.floor(currentChunk.length * 0.15));
+      currentChunk = overlapText + sentence;
+    } else {
+      currentChunk += sentence;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    const trimmedText = currentChunk.trim();
+    chunks.push({
+      id: `chunk-${chunks.length}`,
+      index: chunks.length,
+      text: trimmedText,
+      startIndex,
+      endIndex: startIndex + trimmedText.length
+    });
+  }
+
+  return chunks;
 }

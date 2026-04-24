@@ -43,27 +43,10 @@ export async function initializeQdrant(): Promise<void> {
   }
 }
 
-export interface Vector {
-  id: string;
-  vector: number[];
-  payload: {
-    project: string;
-    timestamp: number;
-    source: string;
-    tags: string[];
-    chunk_index: number;
-    content: string;
-  };
-}
-
-export async function upsertVectors(vectors: Vector[]): Promise<number> {
+export async function upsertVectors(vectors: any[]): Promise<number> {
   try {
     await client.upsert(COLLECTION_NAME, {
-      points: vectors.map(v => ({
-        id: v.id,
-        vector: v.vector,
-        payload: v.payload
-      }))
+      points: vectors
     });
     return vectors.length;
   } catch (error) {
