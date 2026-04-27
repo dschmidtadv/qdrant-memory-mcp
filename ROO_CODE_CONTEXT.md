@@ -20,7 +20,23 @@ This project transitions the AI agent's "second brain" from a UI-heavy AnythingL
 - Single source of truth for all agent memory operations
 
 ### Transport Layer
-The MCP server uses the modern Streamable HTTP transport standard, which officially replaced the deprecated Server-Sent Events (SSE) protocol. This allows for stateless request-response communication via a unified `/mcp` endpoint and prevents connection timeouts behind AWS Application Load Balancers.
+The MCP server runs as a **local Node.js process** using **stdio transport** (not HTTP). It communicates with Claude via standard input/output, making it ideal for local development and integration with Claude Desktop.
+
+**Important:** The MCP server is NOT a Docker container. It runs as a native Node.js process via `node dist/index.js` and connects to Qdrant and Ollama via HTTP.
+
+**Startup:**
+```bash
+cd mcp-server && npm run build && npm start
+```
+
+**Verification:**
+```
+Connecting to Qdrant at: http://localhost:6333
+Environment: local
+Collection: agent-memory (768-dim)
+MCP Server connected via stdio transport
+Metrics server listening on :9091
+```
 
 ### Hybrid Embeddings
 

@@ -90,6 +90,12 @@ function startMetricsServer() {
   });
   const metricsServer = metricsApp.listen(9091, () => {
     console.error('Metrics server listening on :9091');
+  }).on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error('Port 9091 already in use, metrics server skipped');
+    } else {
+      console.error('Metrics server error:', err);
+    }
   });
   return { app: metricsApp, metricsServer };
 }
