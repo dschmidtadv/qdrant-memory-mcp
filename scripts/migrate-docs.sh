@@ -311,6 +311,38 @@ process_repository() {
     log_success "Completed indexing for: $repo_name"
 }
 
+# Ensure Qdrant collection exists
+ensure_collection_exists() {
+    local collection_name=$1
+    
+    # Check if collection exists
+    local response=$(curl -s "$QDRANT_URL/collections/$collection_name" 2>&1)
+    
+    if echo "$response" | grep -q '"status":"ok"'; then
+        log_info "Collection '$collection_name' already exists"
+        return 0
+    fi
+    
+    # Collection doesn't exist, create it
+    log_info "Creating Qdrant collection: $collection_name"
+    local create_response=$(curl -s -X PUT "$QDRANT_URL/collections/$collection_name" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "vectors": {
+                "size": 768,
+                "distance": "Cosine"
+            }
+        }' 2>&1)
+    
+    if echo "$create_response" | grep -q '"status":"ok"'; then
+        log_success "Collection '$collection_name' created successfully"
+        return 0
+    else
+        log_error "Failed to create collection: $create_response"
+        return 1
+    fi
+}
+
 # Main execution
 main() {
     parse_args "$@"
@@ -323,6 +355,12 @@ main() {
     log_info "Qdrant Collection: $QDRANT_COLLECTION"
     log_info "Apps directory: $APPS_DIR"
     log_info "Memory directory: $MEMORY_DIR"
+    
+    # Ensure collection exists before processing
+    if ! ensure_collection_exists "$QDRANT_COLLECTION"; then
+        log_error "Failed to ensure collection exists. Aborting migration."
+        exit 1
+    fi
     
     if [ -n "$SPECIFIC_REPO" ]; then
         # Process specific repository
