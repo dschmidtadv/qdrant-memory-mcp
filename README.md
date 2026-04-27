@@ -2,7 +2,7 @@
 
 A high-performance, production-ready memory system for AI agents combining Qdrant vector database with a custom Model Context Protocol (MCP) server. Designed for seamless local development and cloud deployment on AWS.
 
-**Status:** ✓ Production Ready | **Phase:** 8a Local Monitoring Complete
+**Status:** ✓ Phase 1 Complete | **Phase:** 1 Critical Fixes (100% Complete) | **Next:** Phase 2 Retry Logic
 
 ---
 
@@ -120,6 +120,39 @@ Agent
 | **Dashboards** | Grafana | Visualization |
 | **Orchestration** | Docker Compose | Local development |
 | **Cloud** | AWS ECS/Fargate | Production deployment |
+
+### Why MCP Server is NOT Containerized (Phase 1)
+
+The MCP server runs on the **host machine** rather than in a Docker container. This is an intentional architectural decision:
+
+#### 1. Stdio Transport Requirement
+- IDE clients (Claude, Cursor, VSCode) communicate with MCP servers via **stdin/stdout**
+- This is a process-level communication protocol, not network-based
+- Docker containers are isolated from the host's stdin/stdout by default
+- Running the MCP server on the host enables direct, native IDE integration
+
+#### 2. Development Workflow Simplicity
+- Host-based execution enables fast iteration during development
+- No need to rebuild Docker image on every code change
+- Easy debugging with Node.js tools and hot-reload
+- Simple workflow: `npm run build` → `npm start`
+
+#### 3. Metrics Server Accessibility
+- Prometheus needs to scrape metrics from the MCP server on port 9091
+- Host-based execution allows simple HTTP connection via `host.docker.internal:9091`
+- No complex port mapping or network configuration needed
+
+#### 4. Separation of Concerns
+- **Infrastructure Services (Containerized):** Qdrant, Ollama, Prometheus, Grafana
+  - Stateful, resource-intensive, benefit from orchestration
+- **Application Layer (Host-Based):** MCP Server
+  - Stateless, lightweight, needs direct IDE integration
+
+#### 5. Phase 2 Transition
+- When deploying to **AWS Fargate**, the MCP server will be containerized
+- Will use **HTTP transport** instead of stdio
+- Will be orchestrated with other services in ECS
+- See Phase 2 implementation plan for containerization details
 
 ---
 
