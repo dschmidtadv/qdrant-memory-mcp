@@ -7,7 +7,7 @@ const COLLECTION_NAME = process.env.NODE_ENV === 'production'
   ? 'agent-memory-prod' 
   : 'agent-memory';
 
-const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 384;
+const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
 
 console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
 console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
