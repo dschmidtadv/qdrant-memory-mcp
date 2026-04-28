@@ -39,11 +39,11 @@ This guide explains how to deploy the Qdrant Memory MCP Server with automatic se
 │  └─────────────────────────────────────────┘                  │
 │                                                                │
 └──────────────────────────────────────────────────────────────┘
-                           ▲
-                           │
-                    (Docker Network)
-                           │
-                           ▼
+                            ▲
+                            │
+                     (Docker Network)
+                            │
+                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │              Host Process (Node.js)                           │
 ├──────────────────────────────────────────────────────────────┤
@@ -547,6 +547,433 @@ cp logs/mcp-monitor.log diagnostics/
 
 # Archive for support
 tar -czf diagnostics.tar.gz diagnostics/
+```
+
+---
+
+## Troubleshooting
+
+### Qdrant Health Check Failures
+
+**Symptom:**
+```
+ERROR: Qdrant health check failed
+```
+
+**Cause:** Qdrant service is not responding to health endpoint requests.
+
+**Solution:**
+
+1. Check Qdrant logs:
+```bash
+docker logs qdrant-local | tail -50
+```
+
+2. Verify Qdrant is responding:
+```bash
+curl http://localhost:6333/api/health
+```
+
+3. If not responding, restart Qdrant:
+```bash
+docker-compose -f docker-compose.healthcheck.yml restart qdrant-local
+```
+
+4. Check resource availability:
+```bash
+docker stats qdrant-local
+```
+
+### Port Conflicts
+
+**Symptom:**
+```
+Address already in use: 0.0.0.0:6333
+```
+
+**Solution:**
+
+1. Identify process using the port:
+```bash
+lsof -i :6333
+```
+
+2. Kill the conflicting process:
+```bash
+kill -9 <PID>
+```
+
+3. Or change the port in docker-compose.yml:
+```yaml
+qdrant-local:
+  ports:
+    - "6334:6333"  # Use 6334 instead
+```
+
+### MCP Server Not Responding
+
+**Symptom:**
+```
+curl: (7) Failed to connect to localhost port 5000
+```
+
+**Solution:**
+
+1. Check if MCP Server process is running:
+```bash
+ps aux | grep "npm start"
+```
+
+2. Check MCP Server logs:
+```bash
+tail -50 logs/mcp-server.log
+```
+
+3. Restart MCP Server:
+```bash
+docker-compose -f docker-compose.healthcheck.yml restart mcp-server
+```
+
+4. Verify it's listening on port 5000:
+```bash
+netstat -an | grep 5000
+```
+
+### Health Monitor Not Detecting Failures
+
+**Symptom:**
+```
+Services are down but monitor hasn't restarted them
+```
+
+**Solution:**
+
+1. Check if monitor is running:
+```bash
+ps aux | grep mcp-monitor
+```
+
+2. If not running, restart it:
+```bash
+./scripts/mcp-monitor.sh &
+```
+
+3. Check monitor logs:
+```bash
+tail -50 logs/mcp-monitor.log
+```
+
+4. Verify monitor has execute permissions:
+```bash
+chmod +x scripts/mcp-monitor.sh
+```
+
+### Docker Socket Permission Denied
+
+**Symptom:**
+```
+permission denied while trying to connect to Docker daemon
+```
+
+**Solution:**
+
+1. Set Docker socket environment variable:
+```bash
+export DOCKER_HOST=unix:///Users/$(whoami)/.docker/run/docker.sock
+```
+
+2. Or add to your shell profile (~/.zshrc or ~/.bash_profile):
+```bash
+export DOCKER_HOST=unix:///Users/$(whoami)/.docker/run/docker.sock
+```
+
+3. Verify Docker connection:
+```bash
+docker ps
+```
+
+---
+
+## Common Issues & Solutions
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| Qdrant not responding | `curl: (7) Failed to connect` | Check `docker logs qdrant-local`, verify port 6333 is open, restart service |
+| Port already in use | `Address already in use: 0.0.0.0:6333` | Run `lsof -i :6333`, kill conflicting process, or change port in docker-compose.yml |
+| MCP Server crashes | `Service mcp-server failed 3 consecutive health checks` | Check `docker logs mcp-server`, verify Qdrant is running, check environment variables |
+| High memory usage | `docker stats` shows >80% memory | Reduce `QDRANT_MEM_LIMIT`, check for memory leaks in logs, restart services |
+| Network connectivity | `Failed to connect to qdrant-local:6333` | Verify Docker network exists, check `docker network ls`, reconnect container to network |
+| Monitor not restarting services | Services down but no restart | Check `ps aux \| grep mcp-monitor`, restart monitor script, check monitor logs |
+| Ollama not responding | `curl: (7) Failed to connect to localhost:11434` | Check `docker logs ollama-local`, verify GPU availability, restart Ollama service |
+| Prometheus not scraping | Metrics endpoint returns 404 | Verify Prometheus config, check `curl http://localhost:9090/api/v1/targets`, restart Prometheus |
+| Grafana dashboard empty | No data in Grafana panels | Verify Prometheus is scraping metrics, check data source configuration, wait for metrics collection |
+| Docker compose file not found | `docker-compose.yml: no such file or directory` | Verify you're in correct directory, check file exists with `ls -la docker-compose*.yml` |
+
+---
+
+## Performance Tuning
+
+### Memory Optimization
+
+**Qdrant Memory Configuration:**
+
+Edit `.env` or `docker-compose.yml`:
+
+```bash
+# For small deployments (< 1M vectors)
+QDRANT_MEM_LIMIT=2g
+QDRANT_MEM_RESERVATION=1g
+
+# For medium deployments (1M - 10M vectors)
+QDRANT_MEM_LIMIT=4g
+QDRANT_MEM_RESERVATION=2g
+
+# For large deployments (> 10M vectors)
+QDRANT_MEM_LIMIT=8g
+QDRANT_MEM_RESERVATION=4g
+```
+
+**Ollama Memory Configuration:**
+
+```bash
+# For CPU-only inference
+OLLAMA_MEM_LIMIT=2g
+OLLAMA_MEM_RESERVATION=1g
+
+# For GPU support
+OLLAMA_MEM_LIMIT=4g
+OLLAMA_MEM_RESERVATION=2g
+```
+
+### CPU Allocation Guidance
+
+**Qdrant CPU:**
+- Minimum: 1 CPU core
+- Recommended: 2 CPU cores
+- High-performance: 4+ CPU cores
+
+**Ollama CPU:**
+- Minimum: 1 CPU core
+- Recommended: 2 CPU cores (for parallel requests)
+- High-performance: 4+ CPU cores
+
+**MCP Server CPU:**
+- Minimum: 0.5 CPU cores
+- Recommended: 1 CPU core
+- High-performance: 2+ CPU cores
+
+### Monitoring Overhead
+
+The health monitor script runs health checks every 30 seconds by default. To adjust:
+
+```bash
+# Edit scripts/mcp-monitor.sh
+HEALTH_CHECK_INTERVAL=30  # Change to desired interval in seconds
+```
+
+**Recommended intervals:**
+- Development: 10-15 seconds (faster failure detection)
+- Production: 30-60 seconds (reduced overhead)
+- High-availability: 5-10 seconds (immediate failure detection)
+
+### Log Rotation
+
+Configure log rotation in `docker-compose.yml`:
+
+```yaml
+services:
+  qdrant-local:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        labels: "service=qdrant"
+```
+
+**Log rotation settings:**
+- `max-size`: Maximum size of a single log file (e.g., "100m", "1g")
+- `max-file`: Maximum number of rotated log files to keep
+- Adjust based on your storage capacity and retention requirements
+
+---
+
+## Security Best Practices
+
+### Network Isolation
+
+**Docker Network Configuration:**
+
+The deployment uses a dedicated bridge network `qdrant-mcp-network` for service communication:
+
+```bash
+# Verify network exists
+docker network ls | grep qdrant-mcp-network
+
+# Inspect network
+docker network inspect qdrant-mcp-network
+```
+
+**Best practices:**
+- Do NOT expose Qdrant port (6333) publicly
+- Do NOT expose Ollama port (11434) publicly
+- Only expose MCP Server port (5000) if needed for external clients
+- Use firewall rules to restrict access to exposed ports
+- Consider using a reverse proxy (nginx, Traefik) for external access
+
+### Credential Management
+
+**Grafana Default Credentials:**
+
+Change the default admin password in `.env`:
+
+```bash
+# Current default
+GF_SECURITY_ADMIN_PASSWORD=admin
+
+# Change to strong password
+GF_SECURITY_ADMIN_PASSWORD=your-secure-password-here
+```
+
+**Best practices:**
+- Change default credentials immediately after deployment
+- Use strong passwords (minimum 16 characters, mixed case, numbers, symbols)
+- Store credentials in a secure vault (e.g., HashiCorp Vault, AWS Secrets Manager)
+- Rotate credentials regularly (every 90 days)
+- Never commit credentials to version control
+
+### Log Security
+
+**Log File Permissions:**
+
+```bash
+# Restrict logs directory to owner only
+chmod 700 logs/
+
+# Restrict individual log files
+chmod 600 logs/mcp-monitor.log
+```
+
+**Sensitive Data in Logs:**
+
+- Monitor logs for sensitive information (API keys, tokens, passwords)
+- Configure log level to INFO or WARN in production (not DEBUG)
+- Implement log aggregation with encryption (e.g., ELK Stack, Splunk)
+- Regularly audit logs for security events
+- Archive old logs securely and delete after retention period
+
+### Access Control
+
+**Grafana Access Control:**
+
+By default, Grafana has user sign-up disabled:
+
+```bash
+# Verify in docker-compose.yml
+GF_USERS_ALLOW_SIGN_UP=false
+```
+
+**Best practices:**
+- Keep sign-up disabled in production
+- Use LDAP/OAuth for enterprise authentication
+- Implement role-based access control (RBAC)
+- Audit user access and permissions regularly
+- Disable unused user accounts
+
+**MCP Server Access Control:**
+
+- Implement authentication for MCP Server endpoints
+- Use API keys or JWT tokens for client authentication
+- Implement rate limiting to prevent abuse
+- Monitor for suspicious access patterns
+
+---
+
+## Post-Deployment Validation Checklist
+
+Use this checklist to verify your deployment is working correctly:
+
+- [ ] **Docker services running:** `docker ps`
+  - Verify all services (qdrant-local, ollama-local, prometheus, grafana) are in "Up" state
+
+- [ ] **Qdrant responding:** `curl http://localhost:6333/api/health`
+  - Should return `{"status":"ok"}` or similar health status
+
+- [ ] **Ollama responding:** `curl http://localhost:11434/api/tags`
+  - Should return list of available models or empty list if no models loaded
+
+- [ ] **MCP Server responding:** `curl http://localhost:5000/mcp`
+  - Should return MCP server response (may be 404 if endpoint not implemented, but connection should succeed)
+
+- [ ] **Metrics available:** `curl http://localhost:9091/metrics`
+  - Should return Prometheus metrics in text format
+
+- [ ] **Prometheus scraping:** `curl http://localhost:9090/api/v1/targets`
+  - Should show targets with "state":"up" for all services
+
+- [ ] **Grafana accessible:** `open http://localhost:3002`
+  - Should load Grafana login page, default credentials: admin/admin
+
+- [ ] **Health monitor running:** `ps aux | grep mcp-monitor`
+  - Should show mcp-monitor.sh process running
+
+- [ ] **Monitor logs active:** `tail -5 logs/mcp-monitor.log`
+  - Should show recent health check entries with timestamps
+
+- [ ] **Qdrant collection exists:** `curl http://localhost:6333/collections`
+  - Should return collection list (may be empty if no collections created yet)
+
+**Validation script:**
+
+```bash
+#!/bin/bash
+echo "=== Post-Deployment Validation ==="
+echo ""
+
+echo "1. Docker services:"
+docker ps | grep -E "qdrant|ollama|prometheus|grafana|mcp"
+
+echo ""
+echo "2. Qdrant health:"
+curl -s http://localhost:6333/api/health | jq .
+
+echo ""
+echo "3. Ollama models:"
+curl -s http://localhost:11434/api/tags | jq .
+
+echo ""
+echo "4. MCP Server:"
+curl -s http://localhost:5000/mcp || echo "MCP endpoint not available"
+
+echo ""
+echo "5. Prometheus metrics:"
+curl -s http://localhost:9091/metrics | head -5
+
+echo ""
+echo "6. Prometheus targets:"
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .job, state: .health}'
+
+echo ""
+echo "7. Health monitor:"
+ps aux | grep mcp-monitor | grep -v grep
+
+echo ""
+echo "8. Monitor logs (last 5 lines):"
+tail -5 logs/mcp-monitor.log
+
+echo ""
+echo "9. Qdrant collections:"
+curl -s http://localhost:6333/collections | jq .
+
+echo ""
+echo "=== Validation Complete ==="
+```
+
+Save as `validate-deployment.sh` and run:
+
+```bash
+chmod +x validate-deployment.sh
+./validate-deployment.sh
 ```
 
 ---
