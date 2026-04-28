@@ -7,7 +7,7 @@ const COLLECTION_NAME = process.env.NODE_ENV === 'production'
   ? 'agent-memory-prod' 
   : 'agent-memory';
 
-const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
+const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 384;
 
 console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
 console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
@@ -78,6 +78,8 @@ export async function searchVectors(
       });
     }
     
+    console.error(`[searchVectors] Searching collection: ${COLLECTION_NAME}, project: ${project}, limit: ${limit}, tags: ${tags?.join(',') || 'none'}`);
+    
     const response: any = await client.search(COLLECTION_NAME, {
       vector: query,
       limit,
@@ -85,15 +87,52 @@ export async function searchVectors(
       with_payload: true
     });
     
-    // Ensure we return an array of results
-    const results = Array.isArray(response) ? response : (response?.result || response?.results || []);
+    // Log the actual response structure for debugging
+    console.error(`[searchVectors] Raw response type: ${typeof response}, isArray: ${Array.isArray(response)}`);
+    console.error(`[searchVectors] Response keys: ${Object.keys(response || {}).join(', ')}`);
     
-    return results.map((item: any) => ({
+    // The Qdrant JS client returns the search results directly as an array
+    // when using client.search(), not wrapped in a response object
+    let results: any[] = [];
+    
+    if (Array.isArray(response)) {
+      // Direct array response from client.search() - this is the normal case
+      results = response;
+      console.error(`[searchVectors] ✓ Parsed as direct array with ${results.length} results`);
+    } else if (response && typeof response === 'object') {
+      // Try common response wrapper patterns (fallback for different API versions)
+      if (Array.isArray(response.points)) {
+        results = response.points;
+        console.error(`[searchVectors] ✓ Parsed from response.points with ${results.length} results`);
+      } else if (Array.isArray(response.result)) {
+        results = response.result;
+        console.error(`[searchVectors] ✓ Parsed from response.result with ${results.length} results`);
+      } else if (Array.isArray(response.results)) {
+        results = response.results;
+        console.error(`[searchVectors] ✓ Parsed from response.results with ${results.length} results`);
+      } else {
+        console.error(`[searchVectors] ✗ Response is object but no array found in standard properties`);
+        console.error(`[searchVectors] Response structure:`, JSON.stringify(response, null, 2).substring(0, 500));
+        results = [];
+      }
+    } else {
+      console.error(`[searchVectors] ✗ Unexpected response type: ${typeof response}`);
+      results = [];
+    }
+    
+    const transformed = results.map((item: any) => ({
       score: item.score || 0,
       payload: item.payload || {}
     }));
+    
+    console.error(`[searchVectors] ✓ Returning ${transformed.length} transformed results`);
+    return transformed;
   } catch (error) {
     console.error('Failed to search vectors:', error);
+    if (error instanceof Error) {
+      console.error(`[searchVectors] Error message: ${error.message}`);
+      console.error(`[searchVectors] Error stack: ${error.stack}`);
+    }
     throw error;
   }
 }
