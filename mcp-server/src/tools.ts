@@ -7,8 +7,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics';
 
 /**
- * Sanitize response text for MCP SDK compatibility
- * Removes hidden Unicode characters and ensures valid UTF-8
+ * Sanitize response text for MCP SDK compatibility.
+ * Removes specific hidden or noncharacter Unicode code points and trims
+ * surrounding whitespace; it does not validate or re-encode UTF-8.
  */
 function sanitizeResponse(text: string): string {
   // Remove zero-width characters and other invisible Unicode
