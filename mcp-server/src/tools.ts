@@ -6,6 +6,60 @@ import { batchProcess } from './batching';
 import { v4 as uuidv4 } from 'uuid';
 import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics';
 
+/**
+ * Sanitize response text for MCP SDK compatibility.
+ * Removes specific hidden or noncharacter Unicode code points and trims
+ * surrounding whitespace; it does not validate or re-encode UTF-8.
+ */
+function sanitizeResponse(text: string): string {
+  // Remove zero-width characters and other invisible Unicode
+  return text
+    .replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF]/g, '')
+    .replace(/[\uFFF0-\uFFFD]/g, '')
+    .trim();
+}
+
+/**
+ * Truncate text to a maximum UTF-8 byte length without splitting Unicode code points
+ */
+function truncateUtf8ByBytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return '';
+  }
+
+  let truncated = '';
+  let currentBytes = 0;
+
+  for (const char of text) {
+    const charBytes = Buffer.byteLength(char, 'utf8');
+    if (currentBytes + charBytes > maxBytes) {
+      break;
+    }
+    truncated += char;
+    currentBytes += charBytes;
+  }
+
+  return truncated;
+}
+
+/**
+ * Validate response size for MCP protocol compliance
+ * MCP responses should be reasonably sized to avoid buffer issues
+ */
+function validateResponseSize(text: string, maxSize: number = 65536): string {
+  const textSize = Buffer.byteLength(text, 'utf8');
+  if (textSize > maxSize) {
+    const truncationSuffix = '\n\n[Response truncated due to size limit]';
+    const suffixSize = Buffer.byteLength(truncationSuffix, 'utf8');
+    const availableBytes = Math.max(0, maxSize - suffixSize);
+
+    console.error(`[recall_context] Response size ${textSize} exceeds limit ${maxSize}, truncating`);
+
+    return truncateUtf8ByBytes(text, availableBytes) + truncationSuffix;
+  }
+  return text;
+}
+
 export const tools: Tool[] = [
   {
     name: 'memorize_context',
@@ -110,6 +164,15 @@ export async function handleMemorizeContext(input: any): Promise<string> {
 
 export async function handleRecallContext(input: any): Promise<string> {
   const { query, project, limit = 5, tags } = input;
+
+  // Validate input before using values in metric labels/timers
+  if (typeof query !== 'string' || query.trim().length === 0) {
+    throw new Error('Query must be a non-empty string');
+  }
+  if (typeof project !== 'string' || project.trim().length === 0) {
+    throw new Error('Project must be a non-empty string');
+  }
+
   const timer = recallDuration.startTimer({ project });
   
   try {
@@ -151,8 +214,12 @@ export async function handleRecallContext(input: any): Promise<string> {
       }
     }
     
+    // Sanitize response for MCP SDK compatibility
+    let sanitized = sanitizeResponse(markdown);
+    sanitized = validateResponseSize(sanitized);
+    
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'success' });
-    return markdown;
+    return sanitized;
   } catch (error) {
     toolErrorsTotal.inc({ tool: 'recall_context', error_type: error instanceof Error ? error.name : 'unknown' });
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'error' });
