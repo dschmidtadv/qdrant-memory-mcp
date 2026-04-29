@@ -141,10 +141,10 @@ export async function handleRecallContext(input: any): Promise<string> {
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'started' });
     
     // Validate input
-    if (!query || typeof query !== 'string') {
+    if (typeof query !== 'string' || query.trim().length === 0) {
       throw new Error('Query must be a non-empty string');
     }
-    if (!project || typeof project !== 'string') {
+    if (typeof project !== 'string' || project.trim().length === 0) {
       throw new Error('Project must be a non-empty string');
     }
     
