@@ -164,18 +164,19 @@ export async function handleMemorizeContext(input: any): Promise<string> {
 
 export async function handleRecallContext(input: any): Promise<string> {
   const { query, project, limit = 5, tags } = input;
+
+  // Validate input before using values in metric labels/timers
+  if (typeof query !== 'string' || query.trim().length === 0) {
+    throw new Error('Query must be a non-empty string');
+  }
+  if (typeof project !== 'string' || project.trim().length === 0) {
+    throw new Error('Project must be a non-empty string');
+  }
+
   const timer = recallDuration.startTimer({ project });
   
   try {
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'started' });
-    
-    // Validate input
-    if (typeof query !== 'string' || query.trim().length === 0) {
-      throw new Error('Query must be a non-empty string');
-    }
-    if (typeof project !== 'string' || project.trim().length === 0) {
-      throw new Error('Project must be a non-empty string');
-    }
     
     // Generate embedding for query
     const queryEmbedding = await getEmbedding(query);
