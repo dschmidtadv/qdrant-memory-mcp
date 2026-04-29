@@ -6,6 +6,30 @@ import { batchProcess } from './batching';
 import { v4 as uuidv4 } from 'uuid';
 import { toolCallsTotal, toolErrorsTotal, memorizeDuration, recallDuration, chunksStoredTotal, recallScoreAvg } from './metrics';
 
+/**
+ * Sanitize response text for MCP SDK compatibility
+ * Removes hidden Unicode characters and ensures valid UTF-8
+ */
+function sanitizeResponse(text: string): string {
+  // Remove zero-width characters and other invisible Unicode
+  return text
+    .replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF]/g, '')
+    .replace(/[\uFFF0-\uFFFD]/g, '')
+    .trim();
+}
+
+/**
+ * Validate response size for MCP protocol compliance
+ * MCP responses should be reasonably sized to avoid buffer issues
+ */
+function validateResponseSize(text: string, maxSize: number = 65536): string {
+  if (text.length > maxSize) {
+    console.error(`[recall_context] Response size ${text.length} exceeds limit ${maxSize}, truncating`);
+    return text.substring(0, maxSize - 100) + '\n\n[Response truncated due to size limit]';
+  }
+  return text;
+}
+
 export const tools: Tool[] = [
   {
     name: 'memorize_context',
@@ -115,6 +139,14 @@ export async function handleRecallContext(input: any): Promise<string> {
   try {
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'started' });
     
+    // Validate input
+    if (!query || typeof query !== 'string') {
+      throw new Error('Query must be a non-empty string');
+    }
+    if (!project || typeof project !== 'string') {
+      throw new Error('Project must be a non-empty string');
+    }
+    
     // Generate embedding for query
     const queryEmbedding = await getEmbedding(query);
     
@@ -151,8 +183,12 @@ export async function handleRecallContext(input: any): Promise<string> {
       }
     }
     
+    // Sanitize response for MCP SDK compatibility
+    let sanitized = sanitizeResponse(markdown);
+    sanitized = validateResponseSize(sanitized);
+    
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'success' });
-    return markdown;
+    return sanitized;
   } catch (error) {
     toolErrorsTotal.inc({ tool: 'recall_context', error_type: error instanceof Error ? error.name : 'unknown' });
     toolCallsTotal.inc({ tool: 'recall_context', project, status: 'error' });
