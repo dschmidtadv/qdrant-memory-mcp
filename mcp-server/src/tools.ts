@@ -20,13 +20,42 @@ function sanitizeResponse(text: string): string {
 }
 
 /**
+ * Truncate text to a maximum UTF-8 byte length without splitting Unicode code points
+ */
+function truncateUtf8ByBytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return '';
+  }
+
+  let truncated = '';
+  let currentBytes = 0;
+
+  for (const char of text) {
+    const charBytes = Buffer.byteLength(char, 'utf8');
+    if (currentBytes + charBytes > maxBytes) {
+      break;
+    }
+    truncated += char;
+    currentBytes += charBytes;
+  }
+
+  return truncated;
+}
+
+/**
  * Validate response size for MCP protocol compliance
  * MCP responses should be reasonably sized to avoid buffer issues
  */
 function validateResponseSize(text: string, maxSize: number = 65536): string {
-  if (text.length > maxSize) {
-    console.error(`[recall_context] Response size ${text.length} exceeds limit ${maxSize}, truncating`);
-    return text.substring(0, maxSize - 100) + '\n\n[Response truncated due to size limit]';
+  const textSize = Buffer.byteLength(text, 'utf8');
+  if (textSize > maxSize) {
+    const truncationSuffix = '\n\n[Response truncated due to size limit]';
+    const suffixSize = Buffer.byteLength(truncationSuffix, 'utf8');
+    const availableBytes = Math.max(0, maxSize - suffixSize);
+
+    console.error(`[recall_context] Response size ${textSize} exceeds limit ${maxSize}, truncating`);
+
+    return truncateUtf8ByBytes(text, availableBytes) + truncationSuffix;
   }
   return text;
 }
