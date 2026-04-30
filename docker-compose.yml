@@ -79,8 +79,13 @@ services:
         max-size: "10m"
         max-file: "3"
     
-    # Health Monitoring: External monitoring via scripts/mcp-monitor.sh
-    # (30s interval, exponential backoff). No Docker healthcheck configured.
+    # Health Monitoring: Docker healthcheck using wget to verify service availability
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   ollama-local:
     image: ollama/ollama:latest
@@ -122,8 +127,13 @@ services:
         max-size: "10m"
         max-file: "3"
     
-    # Health Monitoring: External monitoring via scripts/mcp-monitor.sh
-    # (30s interval, exponential backoff). No Docker healthcheck configured.
+    # Health Monitoring: Docker healthcheck using wget to verify service availability
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:latest
