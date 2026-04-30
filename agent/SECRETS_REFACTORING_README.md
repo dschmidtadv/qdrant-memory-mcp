@@ -9,7 +9,7 @@ This refactoring externalizes all hardcoded secrets from `roo-code-settings.json
 ### 1. `.env` (Git-ignored)
 Contains all actual secret values for local development. This file is added to `.gitignore` and should never be committed.
 
-**Location:** `~/.roo/.env`
+**Location:** `agent/.env`
 
 **Contents:**
 - AWS credentials (access key, secret key, region, profile)
@@ -21,7 +21,7 @@ Contains all actual secret values for local development. This file is added to `
 ### 2. `.env.example` (Git-tracked)
 Template file documenting all required environment variables with placeholder values. This serves as documentation for developers setting up the project.
 
-**Location:** `~/.roo/.env.example`
+**Location:** `agent/.env.example`
 
 **Purpose:**
 - Provides a reference for all required environment variables
@@ -31,7 +31,7 @@ Template file documenting all required environment variables with placeholder va
 ### 3. `roo-code-settings-refactored.json` (Git-tracked)
 Refactored configuration file with all hardcoded secrets replaced by `${ENV_VAR}` placeholders.
 
-**Location:** `~/.roo/roo-code-settings-refactored.json`
+**Location:** `agent/roo-code-settings-refactored.json`
 
 **Changes:**
 - All AWS credentials replaced with `${AWS_ACCESS_KEY}`, `${AWS_SECRET_KEY}`, etc.
@@ -42,7 +42,7 @@ Refactored configuration file with all hardcoded secrets replaced by `${ENV_VAR}
 ### 4. `config-loader.js` (Git-tracked)
 Node.js utility script that loads the refactored configuration and substitutes environment variables at runtime.
 
-**Location:** `~/.roo/config-loader.js`
+**Location:** `agent/config-loader.js`
 
 **Features:**
 - Loads `.env` file using `dotenv` package
@@ -104,18 +104,19 @@ node config-loader.js > config-output.json
 
 1. **Copy the example file:**
    ```bash
-   cp ~/.roo/.env.example ~/.roo/.env
+   cp agent/.env.example agent/.env
    ```
 
 2. **Fill in actual values:**
    ```bash
-   # Edit .env with your actual credentials
-   nano ~/.roo/.env
+   # Edit agent/.env with your actual credentials
+   nano agent/.env
    ```
 
-3. **Verify .env is in .gitignore:**
+3. **Verify `.env` is in `.gitignore`:**
+   The repo's `.gitignore` and `agent/.gitignore` already exclude `.env`. To confirm:
    ```bash
-   echo ".env" >> ~/.roo/.gitignore
+   grep ".env" agent/.gitignore
    ```
 
 4. **Load configuration in your application:**
@@ -123,6 +124,12 @@ node config-loader.js > config-output.json
    const { loadConfig } = require('./config-loader');
    const config = loadConfig('./roo-code-settings-refactored.json');
    ```
+
+> **Optional `~/.roo` symlink:** If you use Roo Code and want it to pick up rules from this monorepo automatically, create a symlink:
+> ```bash
+> ln -s ~/apps/qdrant-memory-mcp/agent ~/.roo
+> ```
+> This is entirely optional and does not affect the repo or its `.gitignore`.
 
 ### For CI/CD Environments
 
@@ -183,7 +190,7 @@ cp ~/Documents/Roo_Memory/manifests/roo-code-settings.json \
 
 ### Step 2: Replace Configuration
 ```bash
-cp ~/.roo/roo-code-settings-refactored.json \
+cp agent/roo-code-settings-refactored.json \
    ~/Documents/Roo_Memory/manifests/roo-code-settings.json
 ```
 
@@ -222,13 +229,13 @@ grep "Warning:" config-loader.js output.log
 If the config fails to load:
 ```bash
 # Verify .env file exists and is readable
-ls -la ~/.roo/.env
+ls -la agent/.env
 
 # Check for syntax errors in .env
-cat ~/.roo/.env | grep -E "^[A-Z_]+=.*"
+cat agent/.env | grep -E "^[A-Z_]+=.*"
 
-# Test config-loader directly
-node config-loader.js
+# Test config-loader directly (run from repo root)
+node agent/config-loader.js
 ```
 
 ### Secrets Still Visible
@@ -257,9 +264,9 @@ grep -r "require.*roo-code-settings.json" --include="*.js" | grep -v config-load
 
 - Original config: `~/Documents/Roo_Memory/manifests/roo-code-settings.json`
 - Backup: `~/Documents/Roo_Memory/manifests/roo-code-settings.json.backup`
-- Refactored config: `~/.roo/roo-code-settings-refactored.json`
-- Environment template: `~/.roo/.env.example`
-- Config loader: `~/.roo/config-loader.js`
+- Refactored config: `agent/roo-code-settings-refactored.json`
+- Environment template: `agent/.env.example`
+- Config loader: `agent/config-loader.js`
 
 ## Support
 
