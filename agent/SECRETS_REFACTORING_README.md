@@ -122,14 +122,10 @@ node config-loader.js > config-output.json
 4. **Load configuration in your application:**
    ```javascript
    const { loadConfig } = require('./config-loader');
-   const config = loadConfig('./roo-code-settings-refactored.json');
+   const config = loadConfig('./roo-code-settings.json');
    ```
 
-> **Optional `~/.roo` symlink:** If you use Roo Code and want it to pick up rules from this monorepo automatically, create a symlink:
-> ```bash
-> ln -s ~/apps/qdrant-memory-mcp/agent ~/.roo
-> ```
-> This is entirely optional and does not affect the repo or its `.gitignore`.
+> **Automated setup:** Run `make install-modes` to automatically create all required symlinks, including the settings symlink pointing to `agent/roo-code-settings.json`.
 
 ### For CI/CD Environments
 

@@ -78,7 +78,7 @@ if (require.main === module) {
   const configArg = process.argv[2];
   const configPath = configArg
     ? (path.isAbsolute(configArg) ? configArg : path.resolve(process.cwd(), configArg))
-    : path.join(__dirname, 'roo-code-settings-refactored.json');
+    : path.join(__dirname, 'roo-code-settings.json');
   const config = loadConfig(configPath);
   console.log(JSON.stringify(config, null, 2));
 }

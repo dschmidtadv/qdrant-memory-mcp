@@ -103,8 +103,8 @@ Rules are stored globally in `~/.roo/rules-{mode}/memory.md`:
 ### Symlink Configuration
 The global `roo-code-settings.json` is shared across all projects via symlink:
 ```
-~/.roo/rules-code/settings/roo-code-settings.json 
-  → /Users/dietrichgottfriedschmidt/Documents/Roo_Memory/manifests/roo-code-settings.json
+~/.roo/rules-code/settings/roo-code-settings.json
+  → {PROJECT_ROOT}/agent/roo-code-settings.json
 ```
 
 This ensures all projects use the same agent configuration and memory system.
@@ -241,7 +241,7 @@ Add monitoring for Qdrant and agent operations
 - **Migration Summary: AnythingLLM Removal Complete** - Stored in Qdrant memory
 - **Verification Guide: Cross-Project Qdrant Usage** - Stored in Qdrant memory
 - **Global Rules Files** - Located in `~/.roo/rules-{mode}/memory.md`
-- **Configuration** - Located in `/Users/dietrichgottfriedschmidt/Documents/Roo_Memory/manifests/roo-code-settings.json`
+- **Configuration** - Located in `{PROJECT_ROOT}/agent/roo-code-settings.json`
 
 ---
 

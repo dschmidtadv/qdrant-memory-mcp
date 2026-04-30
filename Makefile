@@ -28,7 +28,7 @@ install-modes: setup-script validate-symlinks
 # Run the setup script
 setup-script:
 	@echo "Running setup script..."
-	@bash scripts/setup-auto-start.sh
+	@bash scripts/install-modes.sh
 
 # Validate all symlinks
 validate-symlinks:
@@ -54,6 +54,17 @@ validate-symlinks:
 				fi; \
 			fi; \
 		done; \
+		settings_link="$$ROO_HOME/rules-code/settings/roo-code-settings.json"; \
+		if [[ -L "$$settings_link" ]]; then \
+			target=$$(readlink "$$settings_link"); \
+			if [[ -f "$$target" ]]; then \
+				echo "✓ roo-code-settings.json → $$target"; \
+				((VALID++)); \
+			else \
+				echo "✗ roo-code-settings.json → $$target (invalid)"; \
+				((INVALID++)); \
+			fi; \
+		fi; \
 		echo ""; \
 		echo "Summary: $$VALID valid, $$INVALID invalid"; \
 		if [[ $$INVALID -gt 0 ]]; then exit 1; fi \
