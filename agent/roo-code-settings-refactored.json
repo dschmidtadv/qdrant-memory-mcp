@@ -1050,7 +1050,7 @@
         "enableReasoningEffort": false,
         "reasoningEffort": "high",
         "openAiBaseUrl": "${RIVA_LITELLM_BASE_URL}",
-        "openAiApiKey": "sk-claude-max-master-key-12345",
+        "openAiApiKey": "${RIVA_LITELLM_API_KEY}",
         "openAiModelId": "bed-claude-4.5-haiku",
         "openAiCustomModelInfo": {
           "maxTokens": -1,

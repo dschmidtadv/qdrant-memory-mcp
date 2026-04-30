@@ -9,7 +9,7 @@ This refactoring externalizes all hardcoded secrets from `roo-code-settings.json
 ### 1. `.env` (Git-ignored)
 Contains all actual secret values for local development. This file is added to `.gitignore` and should never be committed.
 
-**Location:** `/.env`
+**Location:** `~/.roo/.env`
 
 **Contents:**
 - AWS credentials (access key, secret key, region, profile)
@@ -21,7 +21,7 @@ Contains all actual secret values for local development. This file is added to `
 ### 2. `.env.example` (Git-tracked)
 Template file documenting all required environment variables with placeholder values. This serves as documentation for developers setting up the project.
 
-**Location:** `/.env.example`
+**Location:** `~/.roo/.env.example`
 
 **Purpose:**
 - Provides a reference for all required environment variables
@@ -31,7 +31,7 @@ Template file documenting all required environment variables with placeholder va
 ### 3. `roo-code-settings-refactored.json` (Git-tracked)
 Refactored configuration file with all hardcoded secrets replaced by `${ENV_VAR}` placeholders.
 
-**Location:** `/roo-code-settings-refactored.json`
+**Location:** `~/.roo/roo-code-settings-refactored.json`
 
 **Changes:**
 - All AWS credentials replaced with `${AWS_ACCESS_KEY}`, `${AWS_SECRET_KEY}`, etc.
@@ -42,7 +42,7 @@ Refactored configuration file with all hardcoded secrets replaced by `${ENV_VAR}
 ### 4. `config-loader.js` (Git-tracked)
 Node.js utility script that loads the refactored configuration and substitutes environment variables at runtime.
 
-**Location:** `/config-loader.js`
+**Location:** `~/.roo/config-loader.js`
 
 **Features:**
 - Loads `.env` file using `dotenv` package
@@ -67,7 +67,7 @@ node config-loader.js > config-output.json
 - `AWS_ACCESS_KEY` - AWS IAM access key for Bedrock API
 - `AWS_SECRET_KEY` - AWS IAM secret key for Bedrock API
 - `AWS_REGION` - AWS region (default: us-east-1)
-- `AWS_PROFILE` - AWS profile name (default: riva-profile)
+- `AWS_PROFILE` - AWS profile name
 - `AWS_BEDROCK_CUSTOM_ARN` - Custom ARN for Bedrock inference profile
 - `AWS_BEDROCK_CUSTOM_ARN_HAIKU` - Custom ARN for Haiku model
 
@@ -92,8 +92,8 @@ node config-loader.js > config-output.json
 - `ANTHROPIC_BASE_URL` - RIVA-hosted Anthropic endpoint
 
 ### Developer Information
-- `DEVELOPER_ID` - Developer identifier (e.g., dschmidt)
-- `APP_ID` - Application identifier (e.g., riva-roo-code)
+- `DEVELOPER_ID` - Developer identifier
+- `APP_ID` - Application identifier
 
 ### CDN Configuration
 - `CLOUDFRONT_DOMAIN` - CloudFront domain for CDN access
@@ -104,18 +104,18 @@ node config-loader.js > config-output.json
 
 1. **Copy the example file:**
    ```bash
-   cp .env.example .env
+   cp ~/.roo/.env.example ~/.roo/.env
    ```
 
 2. **Fill in actual values:**
    ```bash
    # Edit .env with your actual credentials
-   nano .env
+   nano ~/.roo/.env
    ```
 
 3. **Verify .env is in .gitignore:**
    ```bash
-   echo ".env" >> .gitignore
+   echo ".env" >> ~/.roo/.gitignore
    ```
 
 4. **Load configuration in your application:**
@@ -183,7 +183,7 @@ cp ~/Documents/Roo_Memory/manifests/roo-code-settings.json \
 
 ### Step 2: Replace Configuration
 ```bash
-cp roo-code-settings-refactored.json \
+cp ~/.roo/roo-code-settings-refactored.json \
    ~/Documents/Roo_Memory/manifests/roo-code-settings.json
 ```
 
@@ -222,10 +222,10 @@ grep "Warning:" config-loader.js output.log
 If the config fails to load:
 ```bash
 # Verify .env file exists and is readable
-ls -la .env
+ls -la ~/.roo/.env
 
 # Check for syntax errors in .env
-cat .env | grep -E "^[A-Z_]+=.*"
+cat ~/.roo/.env | grep -E "^[A-Z_]+=.*"
 
 # Test config-loader directly
 node config-loader.js
@@ -257,9 +257,9 @@ grep -r "require.*roo-code-settings.json" --include="*.js" | grep -v config-load
 
 - Original config: `~/Documents/Roo_Memory/manifests/roo-code-settings.json`
 - Backup: `~/Documents/Roo_Memory/manifests/roo-code-settings.json.backup`
-- Refactored config: `/roo-code-settings-refactored.json`
-- Environment template: `/.env.example`
-- Config loader: `/config-loader.js`
+- Refactored config: `~/.roo/roo-code-settings-refactored.json`
+- Environment template: `~/.roo/.env.example`
+- Config loader: `~/.roo/config-loader.js`
 
 ## Support
 
