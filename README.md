@@ -2,7 +2,7 @@
 
 A high-performance, production-ready memory system for AI agents combining Qdrant vector database with a custom Model Context Protocol (MCP) server. Designed for seamless local development and cloud deployment on AWS.
 
-**Status:** ✓ Phase 1 Complete | **Phase:** 1 Critical Fixes (100% Complete) | **Next:** Phase 2 Retry Logic
+**Status:** ✓ Phase 8a Complete | **Current Work:** Phase 7 — Qdrant Error Handling & Retry Logic (planning) | **Last Updated:** 2026-04-29
 
 ---
 
@@ -16,7 +16,9 @@ A high-performance, production-ready memory system for AI agents combining Qdran
 - [API Documentation](#api-documentation)
 - [Monitoring](#monitoring)
 - [Deployment](#deployment)
+- [Agent Integration (Dual-Brain Workflow)](#agent-integration-dual-brain-workflow)
 - [Contributing](#contributing)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 ---
@@ -29,18 +31,20 @@ Qdrant-MCP is a headless, high-performance memory system that replaces tradition
 
 - **Vector Database:** Qdrant for semantic search and retrieval
 - **MCP Server:** Custom TypeScript implementation using the Model Context Protocol
-- **Hybrid Embeddings:** Local Ollama for development, AWS Bedrock for production
-- **Monitoring:** Prometheus + Grafana for local, CloudWatch for production
+- **Hybrid Embeddings:** Local Ollama (768-dim) for development, AWS Bedrock Titan v2 (1024-dim) for production
+- **Dual Transport:** `stdio` for local IDE integration, `http` for cloud Fargate deployment
+- **Monitoring:** Prometheus + Grafana locally, CloudWatch in production
 - **Scalability:** Docker Compose locally, AWS ECS/Fargate in production
 
 ### Key Features
 
-✓ **Single Source of Truth:** Qdrant as exclusive memory backend  
-✓ **Stateless HTTP Transport:** Modern MCP Streamable HTTP protocol  
-✓ **Hybrid Embeddings:** Seamless switching between local and cloud providers  
-✓ **Production Monitoring:** 9 metrics, 8 alert rules, auto-scaling  
-✓ **Global Rules System:** Dynamic project detection, centralized configuration  
-✓ **Cross-Project Consistency:** Unified agent behavior across projects  
+✓ **Single Source of Truth:** Qdrant as exclusive memory backend (AnythingLLM fully removed)
+✓ **Dual Transport:** `TRANSPORT_MODE=stdio` (default, IDE) or `TRANSPORT_MODE=http` (cloud ALB)
+✓ **Hybrid Embeddings:** Seamless switching between local Ollama (768-dim) and AWS Bedrock (1024-dim)
+✓ **Environment-Aware Collections:** `agent-memory` (local) vs `agent-memory-prod` (production)
+✓ **Production Monitoring:** 9 metrics, 8 alert rules, Prometheus + Grafana dashboards
+✓ **Global Rules System:** Dynamic project detection, centralized agent configuration
+✓ **Dual-Brain Agent Workflow:** GitNexus (structural) + Qdrant (semantic) memory integration
 
 ---
 
@@ -79,11 +83,13 @@ Qdrant-MCP is a headless, high-performance memory system that replaces tradition
 │  HOST MACHINE (macOS/Linux)                                  │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │  MCP Server (stdio transport)                        │   │
-│  │  - Reads from stdin                                  │   │
-│  │  - Writes to stdout                                  │   │
+│  │  MCP Server (stdio transport — default)              │   │
+│  │  - Reads from stdin / writes to stdout               │   │
 │  │  - Metrics HTTP server on :9091                      │   │
-│  │  - Accessible to Docker via host.docker.internal    │   │
+│  │  - Accessible to Docker via host.docker.internal     │   │
+│  │                                                      │   │
+│  │  Set TRANSPORT_MODE=http for cloud/ALB mode          │   │
+│  │  (exposes POST /mcp endpoint on MCP_PORT=3000)       │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -95,16 +101,16 @@ Agent
   │
   ├─→ memorize_context(content, project, tags)
   │   └─→ MCP Server
-  │       ├─→ Chunk content (512-1024 tokens)
-  │       ├─→ Generate embeddings (Ollama/Bedrock)
-  │       ├─→ Store in Qdrant
+  │       ├─→ Chunk content (512-1024 tokens, 10-20% overlap)
+  │       ├─→ Generate embeddings (Ollama 768-dim / Bedrock 1024-dim)
+  │       ├─→ Store in Qdrant (agent-memory / agent-memory-prod)
   │       └─→ Emit metrics (mcp_chunks_stored_total++)
   │
   └─→ recall_context(project, query, limit)
       └─→ MCP Server
           ├─→ Generate query embedding
-          ├─→ Search Qdrant (semantic similarity)
-          ├─→ Return top-k results
+          ├─→ Search Qdrant (HNSW cosine similarity + project filter)
+          ├─→ Return top-k results as Markdown
           └─→ Emit metrics (mcp_recall_duration_seconds)
 ```
 
@@ -114,45 +120,46 @@ Agent
 |-----------|-----------|---------|
 | **Vector DB** | Qdrant | Semantic search & storage |
 | **MCP Server** | TypeScript + Node.js | Tool implementation |
-| **Local Embeddings** | Ollama (nomic-embed-text) | Development |
-| **Cloud Embeddings** | AWS Bedrock Titan | Production |
-| **Metrics** | Prometheus | Time-series collection |
+| **Local Embeddings** | Ollama (nomic-embed-text, 768-dim) | Development |
+| **Cloud Embeddings** | AWS Bedrock Titan v2 (1024-dim) | Production |
+| **Metrics** | Prometheus + prom-client | Time-series collection |
 | **Dashboards** | Grafana | Visualization |
 | **Orchestration** | Docker Compose | Local development |
-| **Cloud** | AWS ECS/Fargate | Production deployment |
+| **Cloud** | AWS ECS/Fargate + EFS | Production deployment |
+| **Code Intelligence** | GitNexus | Structural memory / blast-radius analysis |
 
-### Why MCP Server is NOT Containerized (Phase 1)
+### Transport Architecture
 
-The MCP server runs on the **host machine** rather than in a Docker container. This is an intentional architectural decision:
+The MCP server supports two transport modes, selected via the `TRANSPORT_MODE` environment variable:
 
-#### 1. Stdio Transport Requirement
-- IDE clients (Claude, Cursor, VSCode) communicate with MCP servers via **stdin/stdout**
-- This is a process-level communication protocol, not network-based
-- Docker containers are isolated from the host's stdin/stdout by default
-- Running the MCP server on the host enables direct, native IDE integration
+| Mode | Value | Use Case | How it works |
+|------|-------|----------|--------------|
+| **stdio** (default) | `TRANSPORT_MODE=stdio` | Local IDE (Claude, Cursor, VSCode) | Process-level stdin/stdout — direct IDE integration |
+| **http** | `TRANSPORT_MODE=http` | AWS Fargate / ALB | POST `/mcp` endpoint on `MCP_PORT` (default 3000) |
 
-#### 2. Development Workflow Simplicity
-- Host-based execution enables fast iteration during development
-- No need to rebuild Docker image on every code change
-- Easy debugging with Node.js tools and hot-reload
-- Simple workflow: `npm run build` → `npm start`
+> **Note:** The HTTP transport (`TRANSPORT_MODE=http`) is scaffolded in
+> `mcp-server/src/transports/http-transport.ts` but is not yet production-complete.
+> Full Streamable HTTP implementation is planned for Phase 9 (cloud deployment).
 
-#### 3. Metrics Server Accessibility
-- Prometheus needs to scrape metrics from the MCP server on port 9091
-- Host-based execution allows simple HTTP connection via `host.docker.internal:9091`
-- No complex port mapping or network configuration needed
+### Why MCP Server is NOT Containerized (Local Development)
 
-#### 4. Separation of Concerns
-- **Infrastructure Services (Containerized):** Qdrant, Ollama, Prometheus, Grafana
-  - Stateful, resource-intensive, benefit from orchestration
-- **Application Layer (Host-Based):** MCP Server
-  - Stateless, lightweight, needs direct IDE integration
+The MCP server runs on the **host machine** rather than in a Docker container for local use:
 
-#### 5. Phase 2 Transition
-- When deploying to **AWS Fargate**, the MCP server will be containerized
-- Will use **HTTP transport** instead of stdio
-- Will be orchestrated with other services in ECS
-- See Phase 2 implementation plan for containerization details
+1. **Stdio Transport Requirement** — IDE clients communicate via stdin/stdout, which requires host-level process access
+2. **Fast Iteration** — No Docker rebuild on code changes; `npm run build && npm start` is sufficient
+3. **Metrics Accessibility** — Prometheus scrapes `:9091` via `host.docker.internal` without complex port mapping
+4. **Separation of Concerns** — Stateful infrastructure (Qdrant, Ollama, Prometheus, Grafana) is containerized; the stateless MCP server runs on the host
+
+When deployed to **AWS Fargate**, the MCP server will be containerized and use `TRANSPORT_MODE=http`.
+
+### Environment-Aware Configuration
+
+| Setting | Local (`NODE_ENV=local`) | Production (`NODE_ENV=production`) |
+|---------|--------------------------|-------------------------------------|
+| **Embedding provider** | Ollama (`nomic-embed-text`) | AWS Bedrock (`amazon.titan-embed-text-v2:0`) |
+| **Vector dimensions** | 768 | 1024 |
+| **Qdrant collection** | `agent-memory` | `agent-memory-prod` |
+| **Transport** | stdio | http |
 
 ---
 
@@ -192,18 +199,23 @@ prometheus        Up
 grafana           Up
 ```
 
-### 3. Start MCP Server (on host)
+### 3. Build and Start MCP Server (on host)
 
 ```bash
 cd mcp-server
 npm install
+npm run build   # Required: compiles TypeScript to dist/
 npm start
 ```
 
 Expected output:
 ```
+Connecting to Qdrant at: http://localhost:6333
+Environment: local
+Collection: agent-memory (768-dim)
 Qdrant initialized successfully
-MCP Server connected via stdio transport
+Transport mode: stdio
+MCP Server connected via stdio transport (local IDE mode)
 Metrics server listening on :9091
 ```
 
@@ -219,7 +231,7 @@ Metrics server listening on :9091
 curl http://localhost:9090/api/v1/targets
 ```
 
-All targets should show `"health": "up"` (except ollama which shows UNKNOWN).
+All targets should show `"health": "up"` (Ollama may show UNKNOWN until a model is pulled).
 
 ---
 
@@ -242,13 +254,8 @@ All targets should show `"health": "up"` (except ollama which shows UNKNOWN).
 #### 1. Install Dependencies
 
 ```bash
-# Install Node.js dependencies
 cd mcp-server
 npm install
-
-# Install Docker (if not already installed)
-# macOS: brew install docker
-# Linux: Follow Docker documentation
 ```
 
 #### 2. Configure Environment
@@ -261,25 +268,28 @@ cp mcp-server/.env.example mcp-server/.env
 nano mcp-server/.env
 ```
 
-#### 3. Build Docker Images
+#### 3. Build MCP Server
 
 ```bash
-# Build MCP server image
-docker build -t qdrant-memory-mcp-mcp-server:latest ./mcp-server
+cd mcp-server
+npm run build
+```
 
-# Pull other images
+#### 4. Pull Docker Images
+
+```bash
 docker pull qdrant/qdrant:latest
 docker pull ollama/ollama:latest
 docker pull prom/prometheus:latest
 docker pull grafana/grafana:latest
 ```
 
-#### 4. Initialize Qdrant Collection
+#### 5. Initialize Qdrant Collection
+
+Qdrant auto-initializes the `agent-memory` collection on first MCP server start. Verify:
 
 ```bash
-# Qdrant will auto-initialize on first run
-# Verify collection exists
-curl http://localhost:6333/api/collections
+curl http://localhost:6333/collections
 ```
 
 ---
@@ -291,23 +301,31 @@ curl http://localhost:6333/api/collections
 **MCP Server** (`mcp-server/.env`):
 
 ```bash
-# Qdrant Configuration
-QDRANT_URL=http://qdrant-local:6333
-QDRANT_COLLECTION=agent-memory
+# Runtime environment — controls embedding provider, vector dimensions, and collection name
+NODE_ENV=local                              # "local" or "production"
 
-# Embedding Configuration
-OLLAMA_URL=http://ollama-local:11434
+# Transport — controls how the MCP server communicates
+TRANSPORT_MODE=stdio                        # "stdio" (IDE) or "http" (cloud/ALB)
+MCP_PORT=3000                               # HTTP port (only used when TRANSPORT_MODE=http)
+
+# Qdrant Configuration
+QDRANT_URL=http://localhost:6333            # Use http://qdrant-local:6333 inside Docker
+QDRANT_COLLECTION=agent-memory             # Overrides auto-detected collection name
+
+# Embedding Configuration (local)
+OLLAMA_URL=http://localhost:11434           # Use http://ollama-local:11434 inside Docker
 OLLAMA_MODEL=nomic-embed-text:latest
 
-# AWS Configuration (production)
+# AWS Configuration (production — NODE_ENV=production)
 AWS_REGION=us-east-1
 AWS_BEDROCK_MODEL=amazon.titan-embed-text-v2:0
 
-# MCP Configuration
-MCP_PORT=3000
+# Logging
 LOG_LEVEL=info
-NODE_ENV=local
 ```
+
+> **Important:** `TRANSPORT_MODE` defaults to `stdio` if not set. Set it to `http` only for
+> cloud deployments behind an ALB. The HTTP transport is not yet production-complete.
 
 ### Docker Compose Configuration
 
@@ -322,7 +340,7 @@ services:
     volumes:
       - ./qdrant_data:/qdrant/storage
     mem_limit: 4g
-    
+
   ollama-local:
     image: ollama/ollama:latest
     ports:
@@ -330,14 +348,14 @@ services:
     volumes:
       - ./ollama_data:/root/.ollama
     mem_limit: 2g
-    
+
   prometheus:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    
+
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -356,17 +374,20 @@ scrape_configs:
     static_configs:
       - targets: ['qdrant-local:6333']
     scrape_interval: 15s
-    
+
   - job_name: 'mcp-server'
     static_configs:
-      - targets: ['host.docker.internal:9091']
+      - targets: ['host.docker.internal:9091']   # MCP server runs on host
     scrape_interval: 10s
-    
+
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
     scrape_interval: 15s
 ```
+
+> **Linux note:** `host.docker.internal` requires `--add-host=host.docker.internal:host-gateway`
+> on native Linux Docker Engine (not needed on Docker Desktop for macOS/Windows).
 
 ---
 
@@ -382,8 +403,8 @@ Store content in the memory system.
 
 **Parameters:**
 - `content` (string, required) — Content to store (markdown, code, documentation)
-- `project` (string, required) — Project identifier (auto-detected from workspace)
-- `tags` (array, optional) — Categorization tags (e.g., ["adr", "architecture", "phase-1"])
+- `project` (string, required) — Project identifier (auto-detected from workspace basename)
+- `tags` (array, optional) — Categorization tags (e.g., `["adr", "architecture", "phase-7"]`)
 
 **Example:**
 
@@ -393,6 +414,11 @@ await memorize_context({
   project: "qdrant-memory-mcp",
   tags: ["adr", "architecture", "phase-4"]
 });
+```
+
+**Response:** Plain text confirmation string, e.g.:
+```
+Successfully stored 3 chunks in memory for project "qdrant-memory-mcp"
 ```
 
 **Metrics Emitted:**
@@ -406,8 +432,9 @@ Retrieve relevant content from memory.
 
 **Parameters:**
 - `project` (string, required) — Project identifier
-- `query` (string, required) — Search query
+- `query` (string, required) — Natural language search query
 - `limit` (number, optional) — Max results (default: 5)
+- `tags` (array, optional) — Filter by tags
 
 **Example:**
 
@@ -419,20 +446,18 @@ const results = await recall_context({
 });
 ```
 
-**Response:**
+**Response:** Markdown-formatted string:
 
-```json
-{
-  "results": [
-    {
-      "id": "uuid-1",
-      "content": "# ADR: Global Rules Migration...",
-      "score": 0.92,
-      "tags": ["adr", "architecture"],
-      "project": "qdrant-memory-mcp"
-    }
-  ]
-}
+```markdown
+# Retrieved Context for "How do we handle dynamic project detection?"
+
+## Result (Score: 0.92)
+**Source:** memorize_context
+**Tags:** adr, architecture
+**Timestamp:** 2026-04-23T...
+
+# ADR: Global Rules Migration
+...
 ```
 
 **Metrics Emitted:**
@@ -450,19 +475,19 @@ const results = await recall_context({
 
 ```
 # Counters
-mcp_tool_calls_total — Total tool invocations
-mcp_tool_errors_total — Total tool errors
-mcp_chunks_stored_total — Chunks stored in Qdrant
+mcp_tool_calls_total          — Total tool invocations
+mcp_tool_errors_total         — Total tool errors
+mcp_chunks_stored_total       — Chunks stored in Qdrant
 
 # Histograms
-mcp_recall_duration_seconds — Recall latency (p50, p95, p99)
+mcp_recall_duration_seconds   — Recall latency (p50, p95, p99)
 mcp_memorize_duration_seconds — Memorize latency
 mcp_embedding_duration_seconds — Embedding generation time
 
 # Gauges
-mcp_recall_score_avg — Average retrieval quality
-mcp_projects_active — Active projects in memory
-mcp_vectors_stored — Total vectors in Qdrant
+mcp_recall_score_avg          — Average retrieval quality
+mcp_projects_active           — Active projects in memory
+mcp_vectors_stored            — Total vectors in Qdrant
 ```
 
 ---
@@ -471,7 +496,7 @@ mcp_vectors_stored — Total vectors in Qdrant
 
 ### Local Monitoring Stack
 
-The project includes a complete monitoring setup for local development:
+The project includes a complete monitoring setup for local development (Phase 8a complete):
 
 #### Prometheus
 
@@ -525,7 +550,7 @@ rate(mcp_tool_errors_total[5m]) / rate(mcp_tool_calls_total[5m])
 
 ### Production Monitoring (AWS CloudWatch)
 
-See [Phase 8b: Cloud Monitoring](docs/PHASE_8B_CLOUD_MONITORING.md) for production setup.
+Cloud monitoring (Phase 8b) is planned. See `.ai-memory/PHASE_8A_TESTING_REPORT.md` for current observability status.
 
 ---
 
@@ -537,28 +562,37 @@ See [Phase 8b: Cloud Monitoring](docs/PHASE_8B_CLOUD_MONITORING.md) for producti
 # 1. Start Docker stack
 docker-compose up -d
 
-# 2. Start MCP server
-cd mcp-server && npm start
+# 2. Build and start MCP server (stdio mode — default)
+cd mcp-server && npm run build && npm start
 
 # 3. Access dashboards
 # Prometheus: http://localhost:9090
-# Grafana: http://localhost:3002
+# Grafana:    http://localhost:3002
+# Metrics:    http://localhost:9091/metrics
 ```
 
-### Production Deployment (AWS)
+### Production Deployment (AWS ECS/Fargate)
 
-See [Deployment Guide](docs/DEPLOYMENT.md) for:
-- ECS task definition
-- Fargate configuration
-- Load balancer setup
-- Auto-scaling policies
-- Secrets management
-- CloudWatch integration
+The production architecture uses:
+- **AWS ECS Fargate** — Compute (no Ollama sidecar; Bedrock handles embeddings natively)
+- **AWS EFS** — Persistent storage for Qdrant data across task lifecycle events
+- **AWS ALB** — Routes HTTP traffic to the MCP server's `/mcp` endpoint
+- **AWS Bedrock Titan v2** — 1024-dim embeddings (no CPU bottleneck)
 
-**Quick Deploy:**
+**Environment variables for production:**
 
 ```bash
-# Build and push Docker image
+NODE_ENV=production
+TRANSPORT_MODE=http
+QDRANT_URL=http://<qdrant-fargate-service>:6333
+AWS_REGION=us-east-1
+AWS_BEDROCK_MODEL=amazon.titan-embed-text-v2:0
+MCP_PORT=3000
+```
+
+**Build and push Docker image:**
+
+```bash
 docker build -t qdrant-memory-mcp-mcp-server:latest ./mcp-server
 docker tag qdrant-memory-mcp-mcp-server:latest \
   <AWS_ACCOUNT>.dkr.ecr.<REGION>.amazonaws.com/qdrant-memory-mcp:latest
@@ -570,6 +604,67 @@ aws ecs update-service \
   --service mcp-server \
   --force-new-deployment
 ```
+
+> **Note:** Full HTTP transport implementation (Phase 9) is required before production deployment.
+> The current `TRANSPORT_MODE=http` stub returns a placeholder response.
+
+---
+
+## Agent Integration (Dual-Brain Workflow)
+
+This project uses a **dual-brain memory architecture** for AI agents:
+
+### Brain 1: GitNexus (Structural Memory)
+
+Indexed at `.gitnexus/` — maps the AST of the codebase (316 symbols, 351 relationships, 2 execution flows).
+
+**Use for:**
+- Impact analysis before modifying any function or class
+- Finding call chains and class dependencies
+- Renaming symbols safely across the codebase
+
+```bash
+# Always run before editing a symbol
+gitnexus_impact({ target: "symbolName", direction: "upstream" })
+```
+
+### Brain 2: Qdrant-MCP (Semantic Memory)
+
+Collection: `agent-memory` — stores architectural decisions, ADRs, and non-code context.
+
+**Use for:**
+- Retrieving ADRs and historical decisions
+- Understanding YAML service definitions and Drupal wiring
+- Loading project rules at task start
+
+```typescript
+recall_context({ project: "qdrant-memory-mcp", query: "your query here", limit: 5 })
+```
+
+### Dual-Brain Decision Matrix
+
+| Question | Brain | Tool |
+|----------|-------|------|
+| "What calls this function?" | GitNexus | `gitnexus_impact()` |
+| "What was the ADR for this decision?" | Qdrant | `recall_context()` |
+| "Which files break if I change this method?" | GitNexus | `gitnexus_impact()` |
+| "What is the retry logic design?" | Qdrant | `recall_context()` |
+
+### Global Rules System
+
+Agent modes use **dynamic `PROJECT_NAME` detection** based on the workspace directory basename:
+
+```
+Workspace: /Users/<user>/apps/qdrant-memory-mcp
+PROJECT_NAME = "qdrant-memory-mcp"
+```
+
+Global rules are stored in `~/.roo/rules-{mode}/memory.md` and shared via a symlink to:
+```
+/Users/<user>/Documents/Roo_Memory/manifests/roo-code-settings.json
+```
+
+This enables seamless cross-project operation without hardcoded project names.
 
 ---
 
@@ -584,13 +679,14 @@ aws ecs update-service \
 
 2. **Make Changes**
    - Follow TypeScript best practices
+   - Run impact analysis before modifying shared symbols: `gitnexus_impact()`
    - Add tests for new functionality
    - Update documentation
 
-3. **Test Locally**
+3. **Build and Test Locally**
    ```bash
+   cd mcp-server
    npm run build
-   npm run test
    npm start
    ```
 
@@ -608,24 +704,40 @@ aws ecs update-service \
 
 ### Code Standards
 
-- **Language:** TypeScript
+- **Language:** TypeScript (strict mode)
+- **Runtime:** Node.js 20+
 - **Linter:** ESLint
 - **Formatter:** Prettier
-- **Tests:** Jest
 - **Documentation:** JSDoc comments
 
-### Running Tests
+---
 
-```bash
-# Unit tests
-npm run test
+## Roadmap
 
-# Integration tests
-npm run test:integration
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | Local Infrastructure (Qdrant + Ollama) | ✅ Complete |
+| Phase 2 | Hybrid MCP Server (TypeScript) | ✅ Complete |
+| Phase 3 | RooCode LLM Configuration | ✅ Complete |
+| Phase 4 | AI Agent Custom Instructions | ✅ Complete |
+| Phase 5 | Data Migration (AnythingLLM → Qdrant) | ✅ Complete |
+| Phase 6 | Testing & Validation | ✅ Complete |
+| Phase 7 | Qdrant Error Handling & Retry Logic | 🔄 In Planning |
+| Phase 8a | Local Monitoring Stack (Prometheus + Grafana) | ✅ Complete |
+| Phase 8b | Cloud Monitoring (AWS CloudWatch) | ⏳ Planned |
+| Phase 9 | Production Deployment (ECS/Fargate + HTTP transport) | ⏳ Planned |
+| Phase 10 | Performance Optimization | ⏳ Planned |
+| Phase 11 | Security Hardening | ⏳ Planned |
+| Phase 12 | Documentation & Runbooks | ⏳ Planned |
 
-# Coverage report
-npm run test:coverage
-```
+---
+
+## Support & Resources
+
+- **GitHub Issues:** https://github.com/dschmidtadv/qdrant-memory-mcp/issues
+- **Architecture Decisions:** See `.ai-memory/` directory
+- **Agent Integration Guide:** See `.ai-memory/GITNEXUS_MCP_INTEGRATION.md`
+- **Project Rules:** See `AGENTS.md` and `CLAUDE.md`
 
 ---
 
@@ -635,25 +747,6 @@ MIT License — See [LICENSE](LICENSE) file for details.
 
 ---
 
-## Support & Resources
-
-- **GitHub Issues:** https://github.com/dschmidtadv/qdrant-memory-mcp/issues
-- **Documentation:** See `docs/` directory
-- **Architecture Decisions:** See `.ai-memory/` directory
-
----
-
-## Roadmap
-
-- [x] Phase 8a: Local Monitoring Stack
-- [ ] Phase 8b: Cloud Monitoring (AWS CloudWatch)
-- [ ] Phase 9: Production Deployment (ECS/Fargate)
-- [ ] Phase 10: Performance Optimization
-- [ ] Phase 11: Security Hardening
-- [ ] Phase 12: Documentation & Runbooks
-
----
-
-**Last Updated:** 2026-04-24  
-**Status:** Production Ready (Phase 8a)  
+**Last Updated:** 2026-04-29
+**Status:** Phase 8a Complete — Phase 7 (Retry Logic) In Planning
 **Maintainer:** Dietrich Schmidt (@dschmidtadv)
