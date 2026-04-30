@@ -3,3 +3,5 @@
 agent/skills/puppeteer-automation/scripts/.env
 **/dist/
 **/*.js.map
+qdrant_data/
+ollama_data/
