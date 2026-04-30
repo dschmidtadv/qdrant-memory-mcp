@@ -1,0 +1,5 @@
+agent/.env
+agent/skills/puppeteer-automation/scripts/.env
+mcp-server/.env
+ollama_data/
+qdrant_data/.ai-memory/
