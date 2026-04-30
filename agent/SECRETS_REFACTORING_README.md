@@ -84,19 +84,19 @@ node config-loader.js > config-output.json
 ### OpenAI Configuration
 - `OPENAI_BASE_URL` - Local OpenAI-compatible endpoint
 - `OPENAI_API_KEY` - OpenAI API key
-- `OPENAI_TEST_BASE_URL` - Test environment base URL
-- `OPENAI_TEST_API_KEY` - Test environment API key
-- `OPENAI_TEST_MODEL_ID` - Test model identifier
+- `OPENAI_TEST_BASE_URL` *(optional)* - Test environment base URL; only needed for local test overrides
+- `OPENAI_TEST_API_KEY` *(optional)* - Test environment API key; only needed for local test overrides
+- `OPENAI_TEST_MODEL_ID` *(optional)* - Test model identifier; only needed for local test overrides
 
 ### Anthropic Configuration
 - `ANTHROPIC_BASE_URL` - RIVA-hosted Anthropic endpoint
 
 ### Developer Information
-- `DEVELOPER_ID` - Developer identifier
-- `APP_ID` - Application identifier
+- `DEVELOPER_ID` *(optional)* - Developer identifier; not referenced by core configs
+- `APP_ID` *(optional)* - Application identifier; not referenced by core configs
 
 ### CDN Configuration
-- `CLOUDFRONT_DOMAIN` - CloudFront domain for CDN access
+- `CLOUDFRONT_DOMAIN` *(optional)* - CloudFront domain for CDN access; not referenced by core configs
 
 ## Setup Instructions
 

@@ -102,8 +102,9 @@ generate-skill --name doc-generator --description "Generate project documentatio
 
 All skills are registered in:
 ```
-/Users/dietrichgottfriedschmidt/.roo/skills/
+agent/skills/
 ```
+(or `~/.roo/skills/` if you are using the optional symlink)
 
 Each skill has its own directory with:
 - `SKILL.md` - Skill definition
