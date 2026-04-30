@@ -75,7 +75,10 @@ module.exports = { loadConfig, substituteEnvVars };
 
 // If run directly, load and print the config
 if (require.main === module) {
-  const configPath = path.join(__dirname, 'roo-code-settings.json');
+  const configArg = process.argv[2];
+  const configPath = configArg
+    ? (path.isAbsolute(configArg) ? configArg : path.resolve(process.cwd(), configArg))
+    : path.join(__dirname, 'roo-code-settings-refactored.json');
   const config = loadConfig(configPath);
   console.log(JSON.stringify(config, null, 2));
 }
