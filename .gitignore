@@ -1,21 +1,7 @@
 .env
-.ai-memory*
-qdrant_data/*
-ollama_data/*
-
-# Build artifacts
-mcp-server/src/**/*.js
-mcp-server/**/*.js
-test_*.js
-*.log
-
-# Backups
-*.bak
-*.backup
-*.old
-
-# Analysis scripts (if temporary)
-analyze_*.py
-compare_*.py
-discover_*.py
-*_analysis.csv
+.claude/settings.local.json
+agent/skills/puppeteer-automation/scripts/.env
+**/dist/
+**/*.js.map
+qdrant_data/
+ollama_data/
