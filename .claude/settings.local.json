@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"python3.*migrate\")",
+      "Bash(python3 *)"
+    ]
+  }
+}
