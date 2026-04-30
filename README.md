@@ -11,6 +11,7 @@ A high-performance, production-ready memory system for AI agents combining Qdran
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [Developer Setup](#developer-setup)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [API Documentation](#api-documentation)
@@ -232,6 +233,98 @@ curl http://localhost:9090/api/v1/targets
 ```
 
 All targets should show `"health": "up"` (Ollama may show UNKNOWN until a model is pulled).
+
+---
+
+## Developer Setup
+
+### Automated Setup for New Developers
+
+When cloning this repository for the first time, you need to bridge the `agent/rules-*/` folders into your VS Code global storage via symlinks. This enables seamless integration with the Roo agent system.
+
+#### Quick Setup (Recommended)
+
+```bash
+# Run the automated setup script
+make install-modes
+```
+
+This single command will:
+1. ✓ Detect your VS Code global storage path
+2. ✓ Create symlinks from `agent/rules-*/` to `~/.roo/rules-*/`
+3. ✓ Validate all symlinks
+4. ✓ Provide clear feedback
+
+#### Manual Setup
+
+If you prefer to run the setup script directly:
+
+```bash
+# Make the script executable
+chmod +x scripts/setup-auto-start.sh
+
+# Run the setup script
+./scripts/setup-auto-start.sh
+```
+
+#### What Gets Installed
+
+The setup script creates symlinks for all `rules-*` directories in the `agent/` folder:
+
+```
+agent/rules-code/          → ~/.roo/rules-code/
+agent/rules-architect/     → ~/.roo/rules-architect/
+agent/rules-orchestrator/  → ~/.roo/rules-orchestrator/
+... (and any other rules-* directories)
+```
+
+These symlinks enable VS Code to access agent configuration and rules globally across all projects.
+
+#### Verification
+
+To verify the setup was successful:
+
+```bash
+# Check symlink status
+make validate-symlinks
+
+# Or manually verify
+ls -la ~/.roo/rules-*/
+```
+
+Expected output:
+```
+~/.roo/rules-code -> /path/to/qdrant-memory-mcp/agent/rules-code
+~/.roo/rules-architect -> /path/to/qdrant-memory-mcp/agent/rules-architect
+```
+
+#### Troubleshooting
+
+**Symlinks not created?**
+- Ensure `agent/rules-*/` directories exist
+- Check that `~/.roo/` directory is writable
+- Run `make install-modes` again with verbose output
+
+**VS Code not recognizing changes?**
+- Restart VS Code completely
+- Check that symlinks point to correct locations: `readlink ~/.roo/rules-code`
+- Verify VS Code global storage path: `~/Library/Application Support/Code/User/globalStorage` (macOS) or `~/.config/Code/User/globalStorage` (Linux)
+
+**Need to clean up?**
+
+```bash
+# Remove all symlinks from ~/.roo/
+make clean-symlinks
+```
+
+#### Available Make Targets
+
+```bash
+make help              # Display all available targets
+make install-modes     # Run setup and validate symlinks (recommended)
+make validate-symlinks # Check symlink status
+make clean-symlinks    # Remove all symlinks from ~/.roo/
+```
 
 ---
 
