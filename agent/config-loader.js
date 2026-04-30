@@ -9,8 +9,18 @@
 
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
 
+function loadDotenvIfAvailable() {
+  try {
+    require('dotenv').config();
+  } catch (error) {
+    if (error && error.code !== 'MODULE_NOT_FOUND') {
+      throw error;
+    }
+  }
+}
+
+loadDotenvIfAvailable();
 /**
  * Recursively replace environment variable references in an object
  * @param {*} obj - Object to process
