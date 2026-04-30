@@ -1,1 +1,5 @@
 .env
+.claude/settings.local.json
+agent/skills/puppeteer-automation/scripts/.env
+**/dist/
+**/*.js.map
