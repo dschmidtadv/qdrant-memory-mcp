@@ -1,6 +1,15 @@
+# Environment Variables
 .env
+.env.local
+.env.*.local
+agent/.env
+agent/.env.local
+
+# IDE & Editor
 .claude/settings.local.json
 agent/skills/puppeteer-automation/scripts/.env
+
+# Build & Runtime
 **/dist/
 **/*.js.map
 qdrant_data/
