@@ -1153,6 +1153,38 @@
     }
   },
   "globalSettings": {
+    "ugipConfiguration": {
+      "enabled": true,
+      "phases": {
+        "modeSpecificInitialization": {
+          "modeHooks": {
+            "orchestrator": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure contracts dependencies relationship map\")",
+            "code": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ PHP 8.3 Docker image ECR tag drupal-deploy\")",
+            "architect": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure relationship map VPC RDS ECS ALB\")",
+            "ask": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure knowledge base\")",
+            "debug": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure debugging procedures\")",
+            "drupal-builder": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ Drupal 10 MySQL 8.0 Qdrant contracts\")",
+            "drupal-orchestrator": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ Drupal orchestration infrastructure\")",
+            "drupal-architect": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ Drupal architecture infrastructure\")",
+            "drupal-qa": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ Drupal QA testing infrastructure\")",
+            "documentation-writer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure documentation templates\")",
+            "drupal-vision": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ Drupal visual design infrastructure\")",
+            "test-engineer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure testing strategies\")",
+            "config-manager": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure configuration\")",
+            "performance-engineer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure performance optimization\")",
+            "ux-reviewer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure UX design\")",
+            "compliance-reviewer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure compliance requirements\")",
+            "security-review": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure security patterns\")",
+            "standards-reviewer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure code standards\")",
+            "cloud-architect": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure relationship map VPC RDS ECS ALB security groups\")",
+            "devops-engineer": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ ECS task definition CPU memory ALB configuration\")",
+            "knowledge-architect": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure knowledge base architectural decisions\")",
+            "sre": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure SRE operational procedures\")",
+            "git-ops": "recall_context(project=\"qdrant-memory-mcp\", query=\"AHRQ infrastructure git workflows\")"
+          }
+        }
+      }
+    },
     "pinnedApiConfigs": {
       "g4x8oncwbr5": true,
       "riva_proxy_sonnet_4_6": true,
