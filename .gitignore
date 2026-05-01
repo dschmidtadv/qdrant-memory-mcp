@@ -14,3 +14,6 @@ agent/skills/puppeteer-automation/scripts/.env
 **/*.js.map
 qdrant_data/
 ollama_data/
+agent/roo-code-settings-resolved.json
+agent/roo-code-settings.json050126.json
+.ai-memory/
