@@ -76,7 +76,7 @@ function substituteEnvVars(obj, currentPath = '') {
         log(`Unresolved: ${envVar} at ${currentPath}`, 'warn');
         return match; // Return original if not found
       }
-      log(`Resolved: ${envVar} = ${value.substring(0, 10)}...`, 'debug');
+      log(`Resolved: ${envVar} at ${currentPath} (length: ${value.length})`, 'debug');
       return value;
     });
   }
