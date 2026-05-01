@@ -71,12 +71,10 @@ export async function setupStdioTransport(server: Server): Promise<void> {
       stopKeepAliveMonitoring();
     });
     
-    // Track activity on stdin
-    const originalRead = process.stdin.read.bind(process.stdin);
-    process.stdin.read = function(...args: any[]) {
+    // Track activity on stdin without mutating core stream methods
+    process.stdin.on('readable', () => {
       connectionState.lastActivityTime = Date.now();
-      return originalRead(...args);
-    };
+    });
     
     // Connect server
     await server.connect(transport);
