@@ -230,15 +230,56 @@ export async function handleRecallContext(input: any): Promise<string> {
 }
 
 /**
+ * Returns true for errors that are clearly transient and worth retrying:
+ * network-level faults, timeouts, and HTTP 5xx server errors.
+ * Validation/input errors and HTTP 4xx responses are non-transient and
+ * should fail immediately without retrying.
+ */
+function isTransientError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const msg = error.message.toLowerCase();
+
+  // Network-level transient failures
+  if (/econnreset|econnrefused|etimedout|enotfound|enetunreach|epipe|socket hang up|network error/.test(msg)) {
+    return true;
+  }
+
+  // Timeout signals
+  if (/timeout|timed out/.test(msg)) {
+    return true;
+  }
+
+  // HTTP 5xx described in the message
+  if (/\b5\d{2}\b/.test(msg)) {
+    return true;
+  }
+
+  // HTTP status property (e.g. axios-style errors)
+  const anyError = error as any;
+  const status: number | undefined = anyError.response?.status ?? anyError.status;
+  if (status !== undefined && status >= 500) {
+    return true;
+  }
+
+  // Everything else (validation errors, 4xx, unknown) — fail fast
+  return false;
+}
+
+/**
  * Wrapper for handleRecallContext with retry logic
- * Retries up to 3 times with exponential backoff on transient errors
+ * Retries up to 3 times with exponential backoff, but only for transient
+ * errors (network faults, timeouts, 5xx). Validation and 4xx errors are
+ * re-thrown immediately without retrying.
  */
 export async function handleRecallContextWithRetry(input: any, retries = 3): Promise<string> {
   let lastError: Error | unknown = null;
-  
+
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      console.error(`[recall_context] Attempt ${attempt + 1}/${retries}`);
+      if (attempt > 0) {
+        console.error(`[recall_context] Retry attempt ${attempt + 1}/${retries}`);
+      }
       const result = await handleRecallContext(input);
       if (attempt > 0) {
         console.error(`[recall_context] ✓ Succeeded on attempt ${attempt + 1}`);
@@ -246,15 +287,23 @@ export async function handleRecallContextWithRetry(input: any, retries = 3): Pro
       return result;
     } catch (error) {
       lastError = error;
+
+      // Fail immediately for non-transient errors (validation, 4xx, etc.)
+      if (!isTransientError(error)) {
+        throw error;
+      }
+
       if (attempt < retries - 1) {
         const backoffMs = 100 * Math.pow(2, attempt);
-        console.error(`[recall_context] ✗ Attempt ${attempt + 1} failed, retrying in ${backoffMs}ms:`,
-          error instanceof Error ? error.message : String(error));
+        console.error(
+          `[recall_context] ✗ Attempt ${attempt + 1} failed (transient), retrying in ${backoffMs}ms:`,
+          error instanceof Error ? error.message : String(error)
+        );
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
     }
   }
-  
+
   console.error(`[recall_context] ✗ All ${retries} attempts failed`);
   throw lastError instanceof Error ? lastError : new Error('recall_context failed after all retries');
 }
