@@ -92,3 +92,18 @@ For any terminal command text:
 - ❌ FORBIDDEN: Invisible Unicode characters (U+200B, U+200C, U+200D, U+FEFF)
 
 Before returning command text, self-check and remove hidden characters.
+
+## CROSS-PROJECT INITIALIZATION (UGIP Phase 4 Enhancement)
+
+### When to Use
+When writing code that depends on infrastructure or other projects (e.g., Drupal code that depends on PHP version).
+
+### Automatic Execution
+At UGIP Phase 4 initialization, after the standard mode-specific query:
+
+1. Extract ORG from PROJECT_NAME: `ahrq:drupal:ahrqgov` → `ORG = ahrq`
+2. Query shared:registry: `recall_context(project="shared:registry", query="${ORG} relationship map")`
+3. Query dependencies for code requirements:
+   - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`
+   - `recall_context(project="${ORG}:infra:devops", query="MySQL version RDS endpoint")`
+4. Synthesize all sources before proceeding

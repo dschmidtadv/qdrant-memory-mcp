@@ -98,3 +98,20 @@ For example:
 - ✅ Errors logged
 - ✅ Timeouts logged
 - ✅ Task progress tracked
+
+## CROSS-PROJECT INITIALIZATION (UGIP Phase 4 Enhancement)
+
+### When to Use
+When orchestrating deployments across multiple projects (e.g., coordinating Drupal + infrastructure updates).
+
+### Automatic Execution
+At UGIP Phase 4 initialization, after the standard mode-specific query:
+
+1. Extract ORG from PROJECT_NAME
+2. Query shared:registry: `recall_context(project="shared:registry", query="${ORG} all projects relationship map")`
+3. Query all projects for deployment state:
+   - `recall_context(project="${ORG}:drupal:ahrqgov", query="deployment state")`
+   - `recall_context(project="${ORG}:infra:drupal-deploy", query="deployment configuration")`
+   - `recall_context(project="${ORG}:infra:devops", query="infrastructure state")`
+   - `recall_context(project="${ORG}:terraform", query="root module state")`
+4. Synthesize all sources before proceeding
