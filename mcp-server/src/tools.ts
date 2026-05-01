@@ -228,3 +228,33 @@ export async function handleRecallContext(input: any): Promise<string> {
     timer();
   }
 }
+
+/**
+ * Wrapper for handleRecallContext with retry logic
+ * Retries up to 3 times with exponential backoff on transient errors
+ */
+export async function handleRecallContextWithRetry(input: any, retries = 3): Promise<string> {
+  let lastError: Error | unknown = null;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      console.error(`[recall_context] Attempt ${attempt + 1}/${retries}`);
+      const result = await handleRecallContext(input);
+      if (attempt > 0) {
+        console.error(`[recall_context] ✓ Succeeded on attempt ${attempt + 1}`);
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries - 1) {
+        const backoffMs = 100 * Math.pow(2, attempt);
+        console.error(`[recall_context] ✗ Attempt ${attempt + 1} failed, retrying in ${backoffMs}ms:`,
+          error instanceof Error ? error.message : String(error));
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+  
+  console.error(`[recall_context] ✗ All ${retries} attempts failed`);
+  throw lastError instanceof Error ? lastError : new Error('recall_context failed after all retries');
+}

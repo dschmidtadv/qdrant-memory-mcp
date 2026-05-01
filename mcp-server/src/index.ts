@@ -4,7 +4,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { initializeQdrant } from './qdrant';
-import { tools, handleMemorizeContext, handleRecallContext } from './tools';
+import { tools, handleMemorizeContext, handleRecallContext, handleRecallContextWithRetry } from './tools';
 import { registry } from './metrics';
 import { setupStdioTransport } from './transports/stdio-transport';
 import { setupHttpTransport } from './transports/http-transport';
@@ -48,7 +48,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         ],
       };
     } else if (toolName === 'recall_context') {
-      const result = await handleRecallContext(toolArgs);
+      const result = await handleRecallContextWithRetry(toolArgs);
       return {
         content: [
           {
