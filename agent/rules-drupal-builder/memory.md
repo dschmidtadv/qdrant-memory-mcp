@@ -105,3 +105,19 @@ For example:
 - ✅ Verification checkpoints logged
 - ✅ Errors logged
 - ✅ Timeouts logged
+
+## CROSS-PROJECT INITIALIZATION (UGIP Phase 4 Enhancement)
+
+### When to Use
+When working on a Drupal project with infrastructure dependencies (e.g., `ahrq:drupal:ahrqgov`).
+
+### Automatic Execution
+At UGIP Phase 4 initialization, after the standard mode-specific query:
+
+1. Extract ORG from PROJECT_NAME: `ahrq:drupal:ahrqgov` → `ORG = ahrq`
+2. Query shared:registry: `recall_context(project="shared:registry", query="${ORG} relationship map")`
+3. Query infrastructure dependencies:
+   - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`
+   - `recall_context(project="${ORG}:infra:devops", query="MySQL version RDS endpoint")`
+   - `recall_context(project="${ORG}:terraform", query="root module outputs")`
+4. Synthesize all sources before proceeding

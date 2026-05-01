@@ -228,3 +228,92 @@ export async function handleRecallContext(input: any): Promise<string> {
     timer();
   }
 }
+
+/**
+ * Returns true for errors that are clearly transient and worth retrying:
+ * network-level faults, timeouts, and HTTP 5xx server errors.
+ * Validation/input errors and HTTP 4xx responses are non-transient and
+ * should fail immediately without retrying.
+ */
+function isTransientError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const msg = error.message.toLowerCase();
+
+  // Network-level transient failure codes
+  // Node.js errno codes (stored lowercase; the message string has already been .toLowerCase()'d above)
+  const TRANSIENT_ERRNO_CODES = ['econnreset', 'econnrefused', 'etimedout', 'enotfound', 'enetunreach', 'epipe'];
+  // Human-readable phrases that indicate transient network conditions
+  const TRANSIENT_PHRASES = ['socket hang up', 'network error'];
+  if ([...TRANSIENT_ERRNO_CODES, ...TRANSIENT_PHRASES].some(pattern => msg.includes(pattern))) {
+    return true;
+  }
+
+  // Timeout signals
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return true;
+  }
+
+  // HTTP 5xx described in the message
+  if (/\b5\d{2}\b/.test(msg)) {
+    return true;
+  }
+
+  // HTTP status property (e.g. axios-style errors) — access via Record to avoid `any`
+  const err = error as Record<string, unknown>;
+  const response = err['response'] as Record<string, unknown> | undefined;
+  let httpStatus: number | undefined;
+  if (typeof response?.['status'] === 'number') {
+    httpStatus = response['status'];
+  } else if (typeof err['status'] === 'number') {
+    httpStatus = err['status'];
+  }
+  if (httpStatus !== undefined && httpStatus >= 500) {
+    return true;
+  }
+
+  // Everything else (validation errors, 4xx, unknown) — fail fast
+  return false;
+}
+
+/**
+ * Wrapper for handleRecallContext with retry logic
+ * Retries up to 3 times with exponential backoff, but only for transient
+ * errors (network faults, timeouts, 5xx). Validation and 4xx errors are
+ * re-thrown immediately without retrying.
+ */
+export async function handleRecallContextWithRetry(input: any, retries = 3): Promise<string> {
+  let lastError: Error | unknown = null;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.error(`[recall_context] Retry attempt ${attempt + 1}/${retries}`);
+      }
+      const result = await handleRecallContext(input);
+      if (attempt > 0) {
+        console.error(`[recall_context] ✓ Succeeded on attempt ${attempt + 1}`);
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      // Fail immediately for non-transient errors (validation, 4xx, etc.)
+      if (!isTransientError(error)) {
+        throw error;
+      }
+
+      if (attempt < retries - 1) {
+        const backoffMs = 100 * Math.pow(2, attempt);
+        console.error(
+          `[recall_context] ✗ Attempt ${attempt + 1} failed (transient), retrying in ${backoffMs}ms:`,
+          error instanceof Error ? error.message : String(error)
+        );
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+
+  console.error(`[recall_context] ✗ All ${retries} attempts failed`);
+  throw lastError instanceof Error ? lastError : new Error('recall_context failed after all retries');
+}
