@@ -42,7 +42,24 @@ PROJECT_NAME = "ahrq-drupal-ahrqgov"
 But we need: ahrq:drupal:ahrqgov
 ```
 
-**Solution:** When opening the project in VS Code, the system will detect the project name. If it doesn't match the naming convention, you can manually set it in your `.ai-memory/ROO_CODE_CONTEXT.md` file.
+**Solution:** Create a `.env` file in your repository root with the correct PROJECT_NAME:
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+PROJECT_NAME=ahrq:drupal:ahrqgov
+ORG=ahrq
+DOMAIN=drupal
+PROJECT=ahrqgov
+EOF
+
+# Add to .gitignore
+echo ".env" >> .gitignore
+```
+
+**Alternative:** If you prefer not to use .env, you can manually set it in your `.ai-memory/ROO_CODE_CONTEXT.md` file.
+
+**See also:** [`ENV_FILE_PROJECT_NAME_CONFIGURATION.md`](ENV_FILE_PROJECT_NAME_CONFIGURATION.md) for complete .env setup guide and templates for all AHRQ projects.
 
 ---
 
