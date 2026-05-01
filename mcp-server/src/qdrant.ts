@@ -1,10 +1,11 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
+import axios from 'axios';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 
 // Environment-aware collection configuration
-const COLLECTION_NAME = process.env.NODE_ENV === 'production' 
-  ? 'agent-memory-prod' 
+const COLLECTION_NAME = process.env.NODE_ENV === 'production'
+  ? 'agent-memory-prod'
   : 'agent-memory';
 
 const VECTOR_SIZE = process.env.NODE_ENV === 'production' ? 1024 : 768;
@@ -62,6 +63,7 @@ export async function searchVectors(
   tags?: string[]
 ): Promise<any[]> {
   try {
+    // Build filter using Qdrant REST API format
     const filter: any = {
       must: [
         {
@@ -79,46 +81,33 @@ export async function searchVectors(
     }
     
     console.error(`[searchVectors] Searching collection: ${COLLECTION_NAME}, project: ${project}, limit: ${limit}, tags: ${tags?.join(',') || 'none'}`);
+    console.error(`[searchVectors] Filter payload: ${JSON.stringify(filter)}`);
     
-    const response: any = await client.search(COLLECTION_NAME, {
-      vector: query,
-      limit,
-      filter,
-      with_payload: true
-    });
-    
-    // Log the actual response structure for debugging
-    console.error(`[searchVectors] Raw response type: ${typeof response}, isArray: ${Array.isArray(response)}`);
-    console.error(`[searchVectors] Response keys: ${Object.keys(response || {}).join(', ')}`);
-    
-    // The Qdrant JS client returns the search results directly as an array
-    // when using client.search(), not wrapped in a response object
-    let results: any[] = [];
-    
-    if (Array.isArray(response)) {
-      // Direct array response from client.search() - this is the normal case
-      results = response;
-      console.error(`[searchVectors] ✓ Parsed as direct array with ${results.length} results`);
-    } else if (response && typeof response === 'object') {
-      // Try common response wrapper patterns (fallback for different API versions)
-      if (Array.isArray(response.points)) {
-        results = response.points;
-        console.error(`[searchVectors] ✓ Parsed from response.points with ${results.length} results`);
-      } else if (Array.isArray(response.result)) {
-        results = response.result;
-        console.error(`[searchVectors] ✓ Parsed from response.result with ${results.length} results`);
-      } else if (Array.isArray(response.results)) {
-        results = response.results;
-        console.error(`[searchVectors] ✓ Parsed from response.results with ${results.length} results`);
-      } else {
-        console.error(`[searchVectors] ✗ Response is object but no array found in standard properties`);
-        console.error(`[searchVectors] Response structure:`, JSON.stringify(response, null, 2).substring(0, 500));
-        results = [];
+    // Use axios to make direct REST API call to bypass JS client validation issues
+    // Configure axios to not throw on any status code
+    const response = await axios.post(
+      `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,
+      {
+        vector: query,
+        limit,
+        filter,
+        with_payload: true
+      },
+      {
+        validateStatus: () => true  // Don't throw on any status code
       }
-    } else {
-      console.error(`[searchVectors] ✗ Unexpected response type: ${typeof response}`);
-      results = [];
+    );
+    
+    console.error(`[searchVectors] REST API response status: ${response.status}`);
+    
+    // Check for error responses
+    if (response.status !== 200) {
+      console.error(`[searchVectors] Error response: ${JSON.stringify(response.data)}`);
+      throw new Error(`Qdrant search failed with status ${response.status}: ${JSON.stringify(response.data)}`);
     }
+    
+    // Parse response from REST API
+    const results = response.data?.result || [];
     
     const transformed = results.map((item: any) => ({
       score: item.score || 0,
@@ -132,6 +121,13 @@ export async function searchVectors(
     if (error instanceof Error) {
       console.error(`[searchVectors] Error message: ${error.message}`);
       console.error(`[searchVectors] Error stack: ${error.stack}`);
+      console.error(`[searchVectors] Error name: ${error.name}`);
+      // Log the full error object for debugging
+      const errorObj = error as Record<string, any>;
+      if (errorObj.response) {
+        console.error(`[searchVectors] Response status: ${errorObj.response.status}`);
+        console.error(`[searchVectors] Response data: ${JSON.stringify(errorObj.response.data)}`);
+      }
     }
     throw error;
   }

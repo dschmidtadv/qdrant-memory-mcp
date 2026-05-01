@@ -45,8 +45,9 @@ function truncateUtf8ByBytes(text: string, maxBytes: number): string {
 /**
  * Validate response size for MCP protocol compliance
  * MCP responses should be reasonably sized to avoid buffer issues
+ * Reduced to 16KB to account for MCP stdio transport overhead
  */
-function validateResponseSize(text: string, maxSize: number = 65536): string {
+function validateResponseSize(text: string, maxSize: number = 16384): string {
   const textSize = Buffer.byteLength(text, 'utf8');
   if (textSize > maxSize) {
     const truncationSuffix = '\n\n[Response truncated due to size limit]';
@@ -203,7 +204,12 @@ export async function handleRecallContext(input: any): Promise<string> {
         const source = payload.source || 'unknown';
         const tagsArray = Array.isArray(payload.tags) ? payload.tags : [];
         const timestamp = payload.timestamp ? new Date(payload.timestamp).toISOString() : 'unknown';
-        const content = payload.content || '';
+        let content = payload.content || '';
+        
+        // Truncate content to 1000 chars per result to keep response size manageable
+        if (content.length > 1000) {
+          content = content.substring(0, 1000) + '\n\n[Content truncated...]';
+        }
         
         markdown += `## Result (Score: ${score})\n`;
         markdown += `**Source:** ${source}\n`;
