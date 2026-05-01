@@ -48,9 +48,6 @@ But we need: ahrq:drupal:ahrqgov
 # Create .env file
 cat > .env << 'EOF'
 PROJECT_NAME=ahrq:drupal:ahrqgov
-ORG=ahrq
-DOMAIN=drupal
-PROJECT=ahrqgov
 EOF
 
 # Add to .gitignore
