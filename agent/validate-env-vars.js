@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load config-loader
-const { loadConfig, substituteEnvVars } = require('./config-loader');
+const { loadConfig } = require('./config-loader');
 
 function validateEnvVars() {
   const configPath = path.join(__dirname, 'roo-code-settings.json');
