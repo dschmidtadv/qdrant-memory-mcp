@@ -37,18 +37,19 @@ function loadDotenvIfAvailable() {
   try {
     // Try to load .env from agent directory first, then current directory
     const agentEnvPath = path.join(__dirname, '.env');
+    let loadedEnvPath = agentEnvPath;
     let result = require('dotenv').config({ path: agentEnvPath });
     
     if (result.error && result.error.code === 'ENOENT') {
       // If agent/.env doesn't exist, try current directory
+      loadedEnvPath = path.join(process.cwd(), '.env');
       result = require('dotenv').config();
     }
     
     if (result.error) {
       log(`dotenv: ${result.error.message}`, 'debug');
     } else {
-      const envPath = result.error ? 'cwd' : agentEnvPath;
-      log(`Loaded ${Object.keys(result.parsed || {}).length} variables from .env`, 'debug');
+      log(`Loaded ${Object.keys(result.parsed || {}).length} variables from ${loadedEnvPath}`, 'debug');
     }
   } catch (error) {
     if (error && error.code !== 'MODULE_NOT_FOUND') {
