@@ -241,11 +241,11 @@ function isTransientError(error: unknown): boolean {
   const msg = error.message.toLowerCase();
 
   // Network-level transient failure codes
-  // Errno codes from Node.js (uppercase in error messages, matched case-insensitively via .toLowerCase())
+  // Node.js errno codes (stored lowercase; the message string has already been .toLowerCase()'d above)
   const TRANSIENT_ERRNO_CODES = ['econnreset', 'econnrefused', 'etimedout', 'enotfound', 'enetunreach', 'epipe'];
   // Human-readable phrases that indicate transient network conditions
   const TRANSIENT_PHRASES = ['socket hang up', 'network error'];
-  if ([...TRANSIENT_ERRNO_CODES, ...TRANSIENT_PHRASES].some(code => msg.includes(code))) {
+  if ([...TRANSIENT_ERRNO_CODES, ...TRANSIENT_PHRASES].some(pattern => msg.includes(pattern))) {
     return true;
   }
 
