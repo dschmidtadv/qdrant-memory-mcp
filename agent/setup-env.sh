@@ -35,14 +35,24 @@ cp "$ENV_EXAMPLE" "$ENV_FILE"
 echo "✅ Created $ENV_FILE"
 echo ""
 
-# Check if .env is in .gitignore
-if grep -q "^\.env" "$SCRIPT_DIR/../.gitignore" 2>/dev/null; then
-    echo "✅ .env is already in .gitignore"
+# Verify required .gitignore entries exist without modifying the repository
+GITIGNORE_FILE="$SCRIPT_DIR/../.gitignore"
+if [ ! -f "$GITIGNORE_FILE" ]; then
+    echo "❌ Error: $GITIGNORE_FILE not found"
+    echo "Please create it and add the following lines before continuing:"
+    echo "  .env"
+    echo "  .env.local"
+    exit 1
+fi
+
+if grep -qx "\.env" "$GITIGNORE_FILE" && grep -qx "\.env\.local" "$GITIGNORE_FILE"; then
+    echo "✅ .env and .env.local are already in .gitignore"
 else
-    echo "📝 Adding .env to .gitignore..."
-    echo ".env" >> "$SCRIPT_DIR/../.gitignore"
-    echo ".env.local" >> "$SCRIPT_DIR/../.gitignore"
-    echo "✅ Added .env to .gitignore"
+    echo "❌ Error: $GITIGNORE_FILE must contain the following entries:"
+    echo "  .env"
+    echo "  .env.local"
+    echo "Please add any missing entries manually and rerun this script."
+    exit 1
 fi
 echo ""
 
