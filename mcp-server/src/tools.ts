@@ -240,13 +240,17 @@ function isTransientError(error: unknown): boolean {
 
   const msg = error.message.toLowerCase();
 
-  // Network-level transient failures
-  if (/econnreset|econnrefused|etimedout|enotfound|enetunreach|epipe|socket hang up|network error/.test(msg)) {
+  // Network-level transient failure codes
+  const TRANSIENT_NETWORK_CODES = [
+    'econnreset', 'econnrefused', 'etimedout', 'enotfound',
+    'enetunreach', 'epipe', 'socket hang up', 'network error',
+  ];
+  if (TRANSIENT_NETWORK_CODES.some(code => msg.includes(code))) {
     return true;
   }
 
   // Timeout signals
-  if (/timeout|timed out/.test(msg)) {
+  if (msg.includes('timeout') || msg.includes('timed out')) {
     return true;
   }
 
@@ -255,10 +259,13 @@ function isTransientError(error: unknown): boolean {
     return true;
   }
 
-  // HTTP status property (e.g. axios-style errors)
-  const anyError = error as any;
-  const status: number | undefined = anyError.response?.status ?? anyError.status;
-  if (status !== undefined && status >= 500) {
+  // HTTP status property (e.g. axios-style errors) — access via Record to avoid `any`
+  const err = error as Record<string, unknown>;
+  const response = err['response'] as Record<string, unknown> | undefined;
+  const httpStatus = typeof response?.['status'] === 'number'
+    ? response['status']
+    : typeof err['status'] === 'number' ? err['status'] : undefined;
+  if (httpStatus !== undefined && httpStatus >= 500) {
     return true;
   }
 
