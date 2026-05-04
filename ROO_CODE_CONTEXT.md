@@ -1,5 +1,62 @@
 # Project Context: Qdrant-MCP Hybrid Memory Architecture
 
+---
+
+## 🏆 Golden Rules (Cached at Start of Every Prompt)
+
+**These rules are cached and reused across all prompts. Read them first.**
+
+### Rule 1: Dual-Source Initialization (DSI)
+Every task starts with two sources:
+1. **LAYER 1 (Fast):** `read_file('ROO_CODE_CONTEXT.md')` — Current project state
+2. **LAYER 2 (Deep):** `recall_context(project=PROJECT_NAME, query=...)` — Qdrant memory
+3. **Synthesis:** Combine both sources before proceeding
+
+### Rule 2: Two-Source Verification (2SV)
+**When:** Architectural proposals, design decisions, planning tasks.
+**NOT required for:** Code changes (use 3SV instead).
+
+Every architectural proposal must include a "Knowledge Check" section:
+```
+## Knowledge Check (2SV)
+
+**Resident Cache (ROO_CODE_CONTEXT.md):**
+- [Findings from this file]
+
+**Memory Bank (Qdrant):**
+- [Findings from recall_context]
+
+**Synthesis:**
+- [Confirm alignment or identify conflicts]
+```
+
+### Rule 3: Triple-Source Verification (3SV)
+**When:** Before executing ANY code change, hook implementation, or service modification.
+**Supersedes:** 2SV when code is being written or modified.
+**Canonical execution order:** Codemap → GitNexus → Qdrant
+
+Before executing ANY code change:
+1. **Query Qdrant:** `recall_context(project, query="[code pattern]")`
+2. **Run GitNexus:** `gitnexus_impact(target, direction="upstream")`
+3. **Check Codemap:** `codemap_search("[schema/routing]")`
+4. **Document:** Knowledge Check section
+5. **Decide:** PROCEED, REVISE, or BLOCK
+
+### Rule 4: Dynamic Project Detection
+```
+PROJECT_NAME = basename(workspace_directory)
+Example: /Users/user/apps/qdrant-memory-mcp → "qdrant-memory-mcp"
+```
+No hardcoding. Always detect dynamically.
+
+### Rule 5: Core Tool Usage
+- **`recall_context(project, query, limit=5)`** — Retrieve from Qdrant
+- **`memorize_context(content, project, tags)`** — Store to Qdrant
+- **`gitnexus_impact(target, direction)`** — Analyze blast radius
+- **`codemap_search(pattern)`** — Find schema dependencies
+
+---
+
 ## Project Overview
 
 This project transitions the AI agent's "second brain" from a UI-heavy AnythingLLM deployment to a headless, high-performance architecture. It utilizes Qdrant as the vector database and a custom TypeScript Model Context Protocol (MCP) server.
@@ -9,75 +66,6 @@ This project transitions the AI agent's "second brain" from a UI-heavy AnythingL
 - Qdrant is now the single source of truth
 - Global rules system implemented with dynamic project detection
 - Cross-project validation passed
-
----
-
-## Architecture Details
-
-### Vector Database
-- **Qdrant** running in a local Docker container
-- Mapped to AWS EFS in production to ensure state persists across task lifecycles
-- Single source of truth for all agent memory operations
-
-### Transport Layer
-The MCP server runs as a **local Node.js process** using **stdio transport** (not HTTP). It communicates with Claude via standard input/output, making it ideal for local development and integration with Claude Desktop.
-
-**Important:** The MCP server is NOT a Docker container. It runs as a native Node.js process via `node dist/index.js` and connects to Qdrant and Ollama via HTTP.
-
-**Startup:**
-```bash
-cd mcp-server && npm run build && npm start
-```
-
-**Verification:**
-```
-Connecting to Qdrant at: http://localhost:6333
-Environment: local
-Collection: agent-memory (768-dim)
-MCP Server connected via stdio transport
-Metrics server listening on :9091
-```
-
-### Hybrid Embeddings
-
-**Local Development:**
-- Uses a containerized Ollama instance running the nomic-embed-text model
-- Runs alongside Qdrant in docker-compose
-
-**Cloud Production:**
-- Uses Amazon Bedrock Titan Text Embeddings v2 natively via the AWS SDK
-- Prevents compute bottlenecks on AWS Fargate
-
-### API Gateway
-The agent communicates with the primary LLM (bedrock-haiku-4.5) directly via the RIVA CloudFront edge-shim (https://d3vhktud33lq4v.cloudfront.net/v1) using required custom authentication headers:
-- `x-app-id: riva-roo-code`
-- `x-developer-id: dschmidt`
-
----
-
-## Dual-Source Initialization (DSI) Protocol
-
-### LAYER 1: RESIDENT CACHE (Fast)
-**Action:** `read_file('ROO_CODE_CONTEXT.md')`
-
-**Purpose:** Current project state, architecture, and recent session logs
-
-**Constraint:** Treat as absolute truth for implementation details
-
-### LAYER 2: MEMORY BANK (Deep)
-**Action:** `recall_context(project=PROJECT_NAME, query=...)`
-
-**Purpose:** Retrieve vector-based project context, ADRs, and code patterns from Qdrant
-
-**Constraint:** Use Qdrant as your exclusive external memory source
-
-### Tool Execution Hierarchy
-1. Read `ROO_CODE_CONTEXT.md`
-2. Execute `recall_context` using the task description as the query
-3. Synthesize both sources
-
-### Two-Source Verification (2SV)
-Every architectural proposal must start with a 'Knowledge Check' section listing findings from both ROO_CODE_CONTEXT and Qdrant memory.
 
 ---
 
@@ -134,6 +122,51 @@ Data ingested into memory must use a recursive chunking strategy targeting 512 t
 
 ---
 
+## Architecture Details
+
+### Vector Database
+- **Qdrant** running in a local Docker container
+- Mapped to AWS EFS in production to ensure state persists across task lifecycles
+- Single source of truth for all agent memory operations
+
+### Transport Layer
+The MCP server runs as a **local Node.js process** using **stdio transport** (not HTTP). It communicates with Claude via standard input/output, making it ideal for local development and integration with Claude Desktop.
+
+**Important:** The MCP server is NOT a Docker container. It runs as a native Node.js process via `node dist/index.js` and connects to Qdrant and Ollama via HTTP.
+
+**Startup:**
+```bash
+cd mcp-server && npm run build && npm start
+```
+
+**Verification:**
+```
+Connecting to Qdrant at: http://localhost:6333
+Environment: local
+Collection: agent-memory (768-dim)
+MCP Server connected via stdio transport
+Metrics server listening on :9091
+```
+
+### Hybrid Embeddings
+
+**Local Development:**
+- Uses a containerized Ollama instance running the nomic-embed-text model
+- Runs alongside Qdrant in docker-compose
+
+**Cloud Production:**
+- Uses Amazon Bedrock Titan Text Embeddings v2 natively via the AWS SDK
+- Prevents compute bottlenecks on AWS Fargate
+
+### API Gateway
+The agent communicates with the primary LLM via a CloudFront edge-shim using custom authentication headers.
+Configure via environment variables — see `agent/.env.example`:
+- `RIVA_API_ENDPOINT` — CloudFront edge-shim URL
+- `RIVA_APP_ID` — Application identifier (`x-app-id` header)
+- `RIVA_DEVELOPER_ID` — Developer identifier (`x-developer-id` header)
+
+---
+
 ## Tech Stack Dependencies
 
 ### Core Dependencies
@@ -150,6 +183,38 @@ Data ingested into memory must use a recursive chunking strategy targeting 512 t
 ---
 
 ## Recent Session Logs
+
+### Session: 2026-05-04 - Three-Brain Architecture Implementation (Phases 1-3)
+
+**Completed Phases:**
+
+#### Phase 1: Deterministic Filtering ✓
+- Audited all 4 active MCP servers (145 tools)
+- Identified dangerous, noisy, and low-value tools
+- Created tool filter configuration
+- Disabled 3 dangerous GitHub tools
+- Result: 145 → 87 tools (42% reduction)
+- All tests passed
+
+#### Phase 2: Triple-Source Verification (3SV) ✓
+- Created 3SV execution template
+- Created 6 validation test cases
+- Updated 3 global rules files with 3SV protocol
+- Implemented Knowledge Check template
+- Defined risk assessment framework
+- All changes committed and pushed
+
+#### Phase 3: Optimization ✓
+- Added "Golden Rules" section to ROO_CODE_CONTEXT.md
+- Reorganized sections for prompt caching efficiency
+- Measured context window savings
+- Optimized for Claude's prefix-based caching
+
+**Key Achievements:**
+- ✓ 42% tool reduction (145 → 87 tools)
+- ✓ 3SV protocol active across all modes
+- ✓ Golden Rules cached at start of every prompt
+- ✓ All phases committed and pushed
 
 ### Session: 2026-04-23 - AnythingLLM Removal & Global Rules Migration
 
@@ -178,18 +243,6 @@ Data ingested into memory must use a recursive chunking strategy targeting 512 t
 - Confirmed symlink to shared roo-code-settings.json works
 - Confirmed VSCode cache reload after restart
 
-**Key Changes:**
-- Removed all AnythingLLM references from roo-code-settings.json
-- Updated 19 custom modes to use Qdrant exclusively
-- Created global rules system with dynamic project detection
-- Implemented symlink-based configuration sharing
-
-**Verification Results:**
-- ✓ 0 AnythingLLM references in configuration
-- ✓ Both qdrant-memory-mcp and starstruck-claude projects verified
-- ✓ Dynamic PROJECT_NAME detection working correctly
-- ✓ recall_context calls working as expected
-
 ---
 
 ## Architecture Transformation Summary
@@ -203,6 +256,8 @@ Data ingested into memory must use a recursive chunking strategy targeting 512 t
 | **External Dependencies** | AnythingLLM service required | None (local Qdrant only) |
 | **Maintenance Model** | N copies of 1 truth (per-project rules) | 1 source of truth (global rules) |
 | **Network Latency** | External service calls | Local vector database only |
+| **Tool Count** | ~145 tools | ~87 tools (42% reduction) |
+| **Verification** | 2SV (Qdrant + ROO_CODE_CONTEXT) | 3SV (Qdrant + GitNexus + Codemap) |
 
 ---
 
@@ -216,21 +271,24 @@ Data ingested into memory must use a recursive chunking strategy targeting 512 t
 ✓ **Easier Maintenance** - One rules file per mode, not N copies  
 ✓ **Cross-Project Consistency** - All projects use same configuration  
 ✓ **Verified Working** - Tested across multiple projects  
+✓ **Tool Optimization** - 42% reduction in available tools  
+✓ **Architectural Verification** - 3SV protocol prevents breaking changes  
+✓ **Prompt Caching** - Golden Rules cached for efficiency  
 
 ---
 
 ## Next Phases
 
-### Phase 5: Apply Migration to Other Projects
-Extend global rules to other projects (ahrqgov-drupal, pso-drupal, github-runner, etc.)
+### Phase 4: Apply Migration to Other Projects
+Extend global rules and 3SV protocol to other projects (ahrqgov-drupal, pso-drupal, github-runner, etc.)
 
-### Phase 6: Testing & Validation
+### Phase 5: Testing & Validation
 Comprehensive testing of new architecture across all modes and projects
 
-### Phase 7: Qdrant Memory Optimization
+### Phase 6: Qdrant Memory Optimization
 Optimize memory storage and retrieval patterns
 
-### Phase 8: Monitoring & Observability
+### Phase 7: Monitoring & Observability
 Add monitoring for Qdrant and agent operations
 
 ---
@@ -240,6 +298,7 @@ Add monitoring for Qdrant and agent operations
 - **ADR: Global Rules with Dynamic Project Detection** - Stored in Qdrant memory
 - **Migration Summary: AnythingLLM Removal Complete** - Stored in Qdrant memory
 - **Verification Guide: Cross-Project Qdrant Usage** - Stored in Qdrant memory
+- **Three-Brain Architecture Implementation** - Stored in Qdrant memory
 - **Global Rules Files** - Located in `~/.roo/rules-{mode}/memory.md`
 - **Configuration** - Located in `{PROJECT_ROOT}/agent/roo-code-settings.json`
 
@@ -253,7 +312,12 @@ Add monitoring for Qdrant and agent operations
 - Global rules system active
 - Dynamic project detection working
 - Cross-project validation passed
+- Three-Brain Architecture implemented (Phases 1-3)
+- Tool optimization complete (42% reduction)
+- 3SV protocol active
+- Golden Rules cached for efficiency
 
-**Last Updated:** 2026-04-23  
+**Last Updated:** 2026-05-04  
 **Migration Status:** COMPLETE  
-**Verification Status:** PASSED
+**Verification Status:** PASSED  
+**Three-Brain Architecture:** PHASES 1-3 COMPLETE

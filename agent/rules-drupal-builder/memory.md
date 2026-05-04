@@ -121,3 +121,102 @@ At UGIP Phase 4 initialization, after the standard mode-specific query:
    - `recall_context(project="${ORG}:infra:devops", query="MySQL version RDS endpoint")`
    - `recall_context(project="${ORG}:terraform", query="root module outputs")`
 4. Synthesize all sources before proceeding
+
+## THREE-SOURCE VERIFICATION (3SV) PROTOCOL
+
+### Mandatory 3SV Trigger Conditions
+You MUST run 3SV before implementing any of the following:
+- A new Drupal service (`*.services.yml` entry)
+- A route controller (`*.routing.yml` entry)
+- A Plugin class (Block, Field, Views, etc.)
+- A hook implementation (`hook_*` in `.module` or `.theme`)
+- A Twig template override (`*.html.twig`)
+- A configuration change in `/config/`
+
+### 3SV Implementation Checklist
+
+Before writing any Drupal code, complete this checklist:
+
+```
+[ ] SOURCE 1 (Codemap): Run codemap_search_in_files to find the YAML/config/Twig definition
+[ ] SOURCE 2 (GitNexus): Run gitnexus_context on the PHP class or .module file
+[ ] SOURCE 3 (Qdrant): Run recall_context for ADRs and standards governing this pattern
+[ ] SYNTHESIZE: Combine all three sources before writing a single line of code
+```
+
+### Drupal Wiring Bridge Pattern
+
+When implementing a service, plugin, or hook, follow this bridge pattern:
+
+**Step 1 — Find the YAML declaration (Codemap):**
+```
+codemap_search_in_files(query: "service_name", scope: "*.services.yml")
+```
+
+**Step 2 — Trace to PHP implementation (GitNexus):**
+```
+gitnexus_context(name: "ClassName extracted from YAML class: key")
+```
+
+**Step 3 — Validate against project standards (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="service implementation standards")
+```
+
+**Step 4 — Implement with full context.**
+
+### Hook Implementation Pattern
+
+For procedural hooks in `.module` files:
+
+**Step 1 — Find existing hook implementations (Codemap):**
+```
+codemap_search_in_files(query: "hook_form_alter", scope: "*.module")
+```
+
+**Step 2 — Analyze call graph (GitNexus):**
+```
+gitnexus_impact(target: "hook_form_alter", direction: "upstream")
+```
+
+**Step 3 — Check for project-specific hook standards (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="hook_form_alter pattern standards")
+```
+
+### Twig Template Override Pattern
+
+**Step 1 — Find template in theme (Codemap):**
+```
+codemap_search_in_files(query: "template_name.html.twig")
+```
+
+**Step 2 — Find PHP preprocess function (GitNexus):**
+```
+gitnexus_context(name: "template_preprocess_node")
+```
+
+**Step 3 — Check theme override ADRs (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="twig template override standards")
+```
+
+## CODEMAP SESSION INITIALIZATION
+
+At the start of every Drupal Builder session:
+```
+codemap_session_start(rootPath: "/path/to/drupal/project")
+```
+
+## GITNEXUS DRUPAL EXTENSIONS CONFIGURATION
+
+GitNexus must be configured to parse Drupal procedural extensions as standard PHP. Ensure the following file extensions are indexed:
+- `*.module` — hook implementations
+- `*.theme` — theme hook implementations
+- `*.install` — schema and update hooks
+- `*.inc` — shared procedural code
+
+GitNexus also extracts:
+- **PHP 8 Attributes** for Plugin discovery (`#[Block]`, `#[Field]`)
+- **Doctrine-style DocBlock Annotations** (`@Block`, `@ViewsField`, `@FieldType`)
+
