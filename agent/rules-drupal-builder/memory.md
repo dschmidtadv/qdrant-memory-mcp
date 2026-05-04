@@ -121,3 +121,164 @@ At UGIP Phase 4 initialization, after the standard mode-specific query:
    - `recall_context(project="${ORG}:infra:devops", query="MySQL version RDS endpoint")`
    - `recall_context(project="${ORG}:terraform", query="root module outputs")`
 4. Synthesize all sources before proceeding
+
+## THREE-SOURCE VERIFICATION (3SV) PROTOCOL
+
+### Mandatory 3SV Trigger Conditions
+You MUST run 3SV before implementing any of the following:
+- A new Drupal service (`*.services.yml` entry)
+- A route controller (`*.routing.yml` entry)
+- A Plugin class (Block, Field, Views, etc.)
+- A hook implementation (`hook_*` in `.module` or `.theme`)
+- A Twig template override (`*.html.twig`)
+- A configuration change in `/config/`
+
+### 3SV Implementation Checklist
+
+Before writing any Drupal code, complete this checklist:
+
+```
+[ ] SOURCE 1 (Codemap): Run codemap_search_in_files to find the YAML/config/Twig definition
+[ ] SOURCE 2 (GitNexus): Run gitnexus_context on the PHP class or .module file
+[ ] SOURCE 3 (Qdrant): Run recall_context for ADRs and standards governing this pattern
+[ ] SYNTHESIZE: Combine all three sources before writing a single line of code
+```
+
+### Drupal Wiring Bridge Pattern
+
+When implementing a service, plugin, or hook, follow this bridge pattern:
+
+**Step 1 — Find the YAML declaration (Codemap):**
+```
+codemap_search_in_files(query: "service_name", scope: "*.services.yml")
+```
+
+**Step 2 — Trace to PHP implementation (GitNexus):**
+```
+gitnexus_context(name: "ClassName extracted from YAML class: key")
+```
+
+**Step 3 — Validate against project standards (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="service implementation standards")
+```
+
+**Step 4 — Implement with full context.**
+
+### Hook Implementation Pattern
+
+For procedural hooks in `.module` files:
+
+**Step 1 — Find existing hook implementations (Codemap):**
+```
+codemap_search_in_files(query: "hook_form_alter", scope: "*.module")
+```
+
+**Step 2 — Analyze call graph (GitNexus):**
+```
+gitnexus_impact(target: "hook_form_alter", direction: "upstream")
+```
+
+**Step 3 — Check for project-specific hook standards (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="hook_form_alter pattern standards")
+```
+
+### Twig Template Override Pattern
+
+**Step 1 — Find template in theme (Codemap):**
+```
+codemap_search_in_files(query: "template_name.html.twig")
+```
+
+**Step 2 — Find PHP preprocess function (GitNexus):**
+```
+gitnexus_context(name: "template_preprocess_node")
+```
+
+**Step 3 — Check theme override ADRs (Qdrant):**
+```
+recall_context(project=PROJECT_NAME, query="twig template override standards")
+```
+
+## CODEMAP SESSION INITIALIZATION
+
+At the start of every Drupal Builder session:
+```
+codemap_session_start(rootPath: "/path/to/drupal/project")
+```
+
+## GITNEXUS DRUPAL EXTENSIONS CONFIGURATION
+
+GitNexus must be configured to parse Drupal procedural extensions as standard PHP. Ensure the following file extensions are indexed:
+- `*.module` — hook implementations
+- `*.theme` — theme hook implementations
+- `*.install` — schema and update hooks
+- `*.inc` — shared procedural code
+
+GitNexus also extracts:
+- **PHP 8 Attributes** for Plugin discovery (`#[Block]`, `#[Field]`)
+- **Doctrine-style DocBlock Annotations** (`@Block`, `@ViewsField`, `@FieldType`)
+
+## Triple-Source Verification (3SV) Protocol
+
+### When to Apply 3SV
+- MANDATORY before implementing Drupal hooks
+- MANDATORY before modifying services.yml
+- MANDATORY before changing routing.yml
+- MANDATORY before adding/modifying Drupal modules
+- MANDATORY before refactoring entity operations
+
+### The Three Sources
+1. **Qdrant (Semantic)** — recall_context for Drupal patterns and ADRs
+2. **GitNexus (Structural)** — gitnexus_impact for hook/service dependencies
+3. **Codemap (Schema)** — codemap_search for YAML wiring and routing
+
+### 3SV Execution Order
+1. Read ROO_CODE_CONTEXT.md (resident cache)
+2. Query Qdrant: `recall_context(project, query="[Drupal pattern/hook]")`
+3. Run GitNexus: `gitnexus_impact(target, direction="upstream")`
+4. Check Codemap: `codemap_search_elements("[hook/route name]")`
+5. Document findings in "Knowledge Check" section
+6. Proceed ONLY if all sources align and risk is acceptable
+
+### Knowledge Check Template
+```
+## Knowledge Check (3SV)
+
+**Qdrant (Semantic):**
+- [Drupal hook patterns and ADRs]
+- [Module architecture decisions]
+
+**GitNexus (Structural):**
+- [Hook implementation callers]
+- [Service dependencies]
+- [Affected execution flows]
+
+**Codemap (Schema):**
+- [services.yml wiring]
+- [routing.yml definitions]
+- [Entity type dependencies]
+
+**Synthesis:**
+- [Confirm all three sources align]
+- [Identify any Drupal-specific conflicts]
+```
+
+### Drupal Builder Mode: Mandatory 3SV
+- MUST run before hook implementations
+- MUST verify services.yml wiring
+- MUST check routing.yml implications
+- MUST verify entity type compatibility
+- MUST block if breaking Drupal core contracts
+
+### Drupal-Specific Risk Assessment
+- **LOW:** New module, isolated hook, no schema changes
+- **MEDIUM:** Hook modification, 2-3 dependent services
+- **HIGH:** Core hook change, 5+ dependent services, schema changes
+- **CRITICAL:** Breaking Drupal core contracts, entity system changes
+
+### Drupal Decision Matrix
+- **PROCEED:** All sources align, Drupal contracts preserved
+- **REVISE:** Hook pattern conflicts, adjust implementation
+- **BLOCK:** Breaking Drupal core contracts or entity system

@@ -107,3 +107,62 @@ At UGIP Phase 4 initialization, after the standard mode-specific query:
    - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`
    - `recall_context(project="${ORG}:infra:devops", query="MySQL version RDS endpoint")`
 4. Synthesize all sources before proceeding
+
+## Triple-Source Verification (3SV) Protocol
+
+### When to Apply 3SV
+- MANDATORY before modifying any PHP/TypeScript code
+- MANDATORY before changing Drupal YAML configurations
+- MANDATORY before refactoring class hierarchies
+- MANDATORY before implementing architectural changes
+
+### The Three Sources
+1. **Qdrant (Semantic)** — recall_context for ADRs and decisions
+2. **GitNexus (Structural)** — gitnexus_impact for blast radius
+3. **Codemap (Schema)** — codemap_search for YAML/routing dependencies
+
+### 3SV Execution Order
+1. Read ROO_CODE_CONTEXT.md (resident cache)
+2. Query Qdrant: `recall_context(project, query="[code pattern/decision]")`
+3. Run GitNexus: `gitnexus_impact(target, direction="upstream")`
+4. Check Codemap: `codemap_search("[schema/routing patterns]")`
+5. Document findings in "Knowledge Check" section
+6. Proceed ONLY if all sources align and risk is acceptable
+
+### Knowledge Check Template
+```
+## Knowledge Check (3SV)
+
+**Qdrant (Semantic):**
+- [Relevant ADRs and code patterns]
+
+**GitNexus (Structural):**
+- [Blast radius analysis]
+- [Affected symbols and call chains]
+
+**Codemap (Schema):**
+- [YAML wiring dependencies]
+- [Drupal routing implications]
+
+**Synthesis:**
+- [Confirm all three sources align]
+- [Identify any conflicts or risks]
+```
+
+### Code Mode: Mandatory 3SV
+- MUST run before any file modifications
+- MUST document blast radius
+- MUST verify no breaking changes
+- MUST block if risk is HIGH or CRITICAL
+- Can proceed with LOW/MEDIUM risk if well-documented
+
+### Risk Assessment
+- **LOW:** Single file, no external callers, isolated change
+- **MEDIUM:** Multiple files, 2-5 callers, contained impact
+- **HIGH:** 5+ files, 5+ callers, multiple execution flows affected
+- **CRITICAL:** Core utilities, 10+ callers, breaking changes
+
+### Decision Matrix
+- **PROCEED:** All sources align, risk is LOW/MEDIUM
+- **REVISE:** Sources conflict or risk is HIGH, adjust approach
+- **BLOCK:** Risk is CRITICAL or unacceptable breaking changes

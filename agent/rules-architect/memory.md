@@ -96,3 +96,144 @@ At UGIP Phase 4 initialization, after the standard mode-specific query:
    - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`
    - `recall_context(project="${ORG}:terraform", query="root module outputs")`
 4. Synthesize all sources before proceeding
+
+## THREE-SOURCE VERIFICATION (3SV) PROTOCOL
+
+### When to Apply 3SV
+For any task involving Drupal framework "wiring" — Services, Routes, Plugins, Hooks, Site Configuration, or the Presentation Layer (Twig) — you MUST synthesize data from all three sources before proposing any architectural change.
+
+### The Three Sources
+
+#### SOURCE 1: Codemap (Schema, Config & Presentation Layer)
+**Tool:** `codemap_search_in_files` or `codemap_search`
+**Purpose:** Identify the YAML definition, site configuration, or Twig template structure.
+**Use for:**
+- `*.services.yml` — service class, arguments, tags
+- `*.routing.yml` — controller class, path, requirements
+- `/config/` directory — `core.extension.yml`, `views.view.*.yml`, field configs
+- `*.html.twig` — template variables, blocks, extends hierarchy
+- Plugin annotations in PHP DocBlocks
+
+**Example query:**
+```
+codemap_search_in_files(query: "logger.factory", scope: "*.services.yml")
+codemap_search_in_files(query: "views.view.frontpage", scope: "config/")
+codemap_search_in_files(query: "node.html.twig")
+```
+
+#### SOURCE 2: GitNexus (Structure & Procedural Code)
+**Tool:** `gitnexus_context` or `gitnexus_impact`
+**Purpose:** Analyze the PHP class OR the procedural hook identified by Codemap for its internal logic, plugin annotations, and dependencies.
+**Use for:**
+- PHP class implementations (Controllers, Services, Plugins)
+- Procedural hooks in `.module`, `.theme`, `.install`, `.inc` files
+- PHP 8 Attributes for Plugin discovery
+- Doctrine-style DocBlock Annotations (`@Block`, `@Field`, `@ViewsField`)
+- Call graph and blast radius analysis
+
+**Example query:**
+```
+gitnexus_context(name: "NodeViewController")
+gitnexus_impact(target: "hook_form_alter", direction: "upstream")
+```
+
+#### SOURCE 3: Qdrant (Semantic Memory — ADRs & Standards)
+**Tool:** `recall_context`
+**Purpose:** Recall the ADRs, coding standards, or project rules that govern this specific service, hook pattern, or configuration pattern.
+**Use for:**
+- Architectural Decision Records (ADRs) for this service/hook
+- Project-specific coding standards
+- Historical context for why a pattern was chosen
+- Cross-project wiring contracts
+
+**Example query:**
+```
+recall_context(project=PROJECT_NAME, query="hook_form_alter coding standards")
+recall_context(project=PROJECT_NAME, query="views service architecture ADR")
+```
+
+### 3SV Execution Order
+1. **Codemap first** → Find the declarative definition (YAML/config/Twig)
+2. **GitNexus second** → Trace the PHP implementation from the class/hook name found in step 1
+3. **Qdrant third** → Validate against stored ADRs and project standards
+
+### 3SV Output Format
+Every architectural proposal using 3SV must include a **Knowledge Check** section:
+
+```markdown
+## Knowledge Check (3SV)
+
+### Source 1: Codemap (Declarative Layer)
+- Found: `mymodule.services.yml` defines `mymodule.my_service` → class `Drupal\mymodule\MyService`
+- Arguments: `['@entity_type.manager', '@logger.factory']`
+
+### Source 2: GitNexus (Structural Layer)
+- `MyService` extends `ServiceBase`, implements `MyServiceInterface`
+- Calls: `EntityTypeManager::getStorage()`, `LoggerFactory::get()`
+- Called by: `MyController::build()` (blast radius: 3 files)
+
+### Source 3: Qdrant (Semantic Layer)
+- ADR-007: All custom services must use constructor injection
+- Standard: Services tagged `needs_destruction` must implement `DestructableInterface`
+```
+
+## CODEMAP INITIALIZATION REQUIREMENT
+
+At the start of every session on a Drupal project, you MUST call:
+```
+codemap_session_start(rootPath: "/path/to/project")
+```
+This initializes the Schema Interpreter brain. Without this, `codemap_search_in_files` will return `NOT_INITIALIZED` errors.
+
+## GITNEXUS INITIALIZATION REQUIREMENT
+
+GitNexus must be initialized with:
+```bash
+npm install -g gitnexus@1.6.3 --ignore-optional
+gitnexus analyze --drop-embeddings
+```
+**Note:** Use `--ignore-optional` (NOT `--ignore-scripts`) and `--drop-embeddings` (NOT `--skip-embeddings`).
+
+## Triple-Source Verification (3SV) Protocol
+
+### When to Apply 3SV
+- Before proposing major architectural changes
+- Before recommending refactoring of core systems
+- Before suggesting new module/service additions
+- Before modifying Drupal YAML configurations
+
+### The Three Sources
+1. **Qdrant (Semantic)** — recall_context for ADRs and architectural decisions
+2. **GitNexus (Structural)** — gitnexus_impact for blast radius analysis
+3. **Codemap (Schema)** — codemap_search for YAML/routing dependencies
+
+### 3SV Execution Order
+1. Read ROO_CODE_CONTEXT.md (resident cache)
+2. Query Qdrant: `recall_context(project, query="[architectural context]")`
+3. Run GitNexus: `gitnexus_impact(target, direction="upstream")`
+4. Check Codemap: `codemap_search("[schema/routing patterns]")`
+5. Document findings in "Knowledge Check" section
+6. Proceed only if all sources align
+
+### Knowledge Check Template
+```
+## Knowledge Check (3SV)
+
+**Qdrant (Semantic):**
+- [ADRs and architectural decisions]
+
+**GitNexus (Structural):**
+- [Blast radius and affected systems]
+
+**Codemap (Schema):**
+- [YAML wiring and Drupal routing]
+
+**Synthesis:**
+- [Confirm alignment or identify conflicts]
+```
+
+### Architect Mode: Advisory 3SV
+- SHOULD run for major design decisions
+- SHOULD document architectural implications
+- SHOULD verify cross-project consistency
+- Can proceed with MEDIUM risk if well-documented
