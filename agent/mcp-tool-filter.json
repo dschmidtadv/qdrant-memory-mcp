@@ -54,8 +54,11 @@
   "implementation": {
     "strategy": "Extend mcp_settings.json with expanded disabledTools arrays",
     "files": [
-      "/Users/dietrichgottfriedschmidt/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"
+      "$HOME/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (macOS)",
+      "$APPDATA/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (Windows)",
+      "$HOME/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (Linux)"
     ],
+    "note": "Replace $HOME/$APPDATA with your actual home directory. See agent/.env.example for configuration guidance.",
     "steps": [
       "1. Add dangerous tools to github.disabledTools",
       "2. Add noisy tools to github.disabledTools",
@@ -65,8 +68,9 @@
     ]
   },
   "expectedOutcome": {
-    "toolReduction": "GitHub: ~60 → ~20 tools (67% reduction)",
-    "totalToolCount": "~72 → ~52 tools (28% reduction)",
+    "baseline": "This file documents GitHub-server-only filtering. For full system totals (all 4 MCP servers), see ROO_CODE_CONTEXT.md.",
+    "toolReduction": "GitHub server: ~60 → ~20 tools (67% reduction)",
+    "totalToolCount": "GitHub server only: ~72 → ~52 tools (28% reduction). Full system: 145 → 87 tools (42% reduction) — see ROO_CODE_CONTEXT.md.",
     "safetyLevel": "HIGH - No loss of core functionality",
     "riskLevel": "LOW - Only removes dangerous/noisy tools"
   },

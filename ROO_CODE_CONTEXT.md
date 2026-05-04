@@ -13,6 +13,9 @@ Every task starts with two sources:
 3. **Synthesis:** Combine both sources before proceeding
 
 ### Rule 2: Two-Source Verification (2SV)
+**When:** Architectural proposals, design decisions, planning tasks.
+**NOT required for:** Code changes (use 3SV instead).
+
 Every architectural proposal must include a "Knowledge Check" section:
 ```
 ## Knowledge Check (2SV)
@@ -28,6 +31,10 @@ Every architectural proposal must include a "Knowledge Check" section:
 ```
 
 ### Rule 3: Triple-Source Verification (3SV)
+**When:** Before executing ANY code change, hook implementation, or service modification.
+**Supersedes:** 2SV when code is being written or modified.
+**Canonical execution order:** Codemap → GitNexus → Qdrant
+
 Before executing ANY code change:
 1. **Query Qdrant:** `recall_context(project, query="[code pattern]")`
 2. **Run GitNexus:** `gitnexus_impact(target, direction="upstream")`
@@ -152,9 +159,11 @@ Metrics server listening on :9091
 - Prevents compute bottlenecks on AWS Fargate
 
 ### API Gateway
-The agent communicates with the primary LLM (bedrock-haiku-4.5) directly via the RIVA CloudFront edge-shim (https://d3vhktud33lq4v.cloudfront.net/v1) using required custom authentication headers:
-- `x-app-id: riva-roo-code`
-- `x-developer-id: dschmidt`
+The agent communicates with the primary LLM via a CloudFront edge-shim using custom authentication headers.
+Configure via environment variables — see `agent/.env.example`:
+- `RIVA_API_ENDPOINT` — CloudFront edge-shim URL
+- `RIVA_APP_ID` — Application identifier (`x-app-id` header)
+- `RIVA_DEVELOPER_ID` — Developer identifier (`x-developer-id` header)
 
 ---
 
