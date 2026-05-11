@@ -2,7 +2,7 @@
 
 A high-performance, production-ready memory system for AI agents combining Qdrant (Semantic Memory), GitNexus (Structural Memory), and Codemap (Schema Memory) with a custom Model Context Protocol (MCP) server. Designed for seamless local development and cloud deployment on AWS.
 
-**Status:** ✅ Phases 1-5 Complete | **Current Work:** Phase 6 — Qdrant Optimization (planning) | **Last Updated:** 2026-05-04
+**Status:** ✅ Phases 1-6 Complete | **Current Work:** Phase 7 — Monitoring & Observability (planning) | **Last Updated:** 2026-05-11
 
 ---
 
@@ -18,6 +18,7 @@ A high-performance, production-ready memory system for AI agents combining Qdran
 - [Monitoring](#monitoring)
 - [Deployment](#deployment)
 - [Agent Integration (Three-Brain Workflow)](#agent-integration-three-brain-workflow)
+- [Cross-Project Deployment (Phase 6)](#cross-project-deployment-phase-6)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
 - [License](#license)
@@ -780,6 +781,119 @@ All projects use the same global rules system and unified memory backend.
 
 ---
 
+## Cross-Project Deployment (Phase 6)
+
+### Quick Deployment Prompt
+
+To deploy the Three-Brain Architecture to another project, use this copy-paste prompt:
+
+```
+Deploy the Three-Brain Architecture to this project.
+
+The Three-Brain Architecture consists of:
+1. **Qdrant (Semantic Brain)** - Vector database for architectural decisions and project context
+2. **GitNexus (Structural Brain)** - AST-based code intelligence for impact analysis
+3. **Codemap (Schema Brain)** - File organization and dependency mapping
+
+Deployment steps:
+1. Copy global rules from ~/.roo/rules-{architect,code,orchestrator,documentation-writer}/memory.md to this project's agent/rules-{mode}/ directories
+2. Create symlink: ln -s ~/.roo/rules-code/settings/roo-code-settings.json agent/roo-code-settings.json
+3. Initialize Qdrant memory with this project's context using memorize_context(project="{PROJECT_NAME}", ...)
+4. Run tests/phase-5a-3sv-unit-tests.sh to verify 3SV protocol is operational
+5. Verify tool filtering is active (should show 87 tools, not 145)
+
+Expected outcomes:
+- Dynamic PROJECT_NAME detection active (no hardcoding)
+- 3SV protocol operational (Qdrant + GitNexus + Codemap)
+- Tool filtering reduces available tools by 42%
+- Golden Rules cached for 64% token reduction
+- All unit tests pass (29/29)
+```
+
+### Manual Step-by-Step Deployment
+
+**Step 1: Copy Global Rules**
+```bash
+mkdir -p agent/rules-{architect,code,orchestrator,documentation-writer}
+cp ~/.roo/rules-architect/memory.md agent/rules-architect/
+cp ~/.roo/rules-code/memory.md agent/rules-code/
+cp ~/.roo/rules-orchestrator/memory.md agent/rules-orchestrator/
+cp ~/.roo/rules-documentation-writer/memory.md agent/rules-documentation-writer/
+```
+
+**Step 2: Create Symlink to Shared Configuration**
+```bash
+ln -s ~/.roo/rules-code/settings/roo-code-settings.json agent/roo-code-settings.json
+```
+
+**Step 3: Initialize Qdrant Memory with Project Context**
+```bash
+memorize_context(
+  project="your-project-name",
+  content="## Project Architecture\n[Your architectural decisions]",
+  tags=["architecture", "adr", "initialization"]
+)
+```
+
+**Step 4: Verify 3SV Protocol is Operational**
+```bash
+bash tests/phase-5a-3sv-unit-tests.sh
+```
+
+Expected: **29/29 tests passed ✅**
+
+**Step 5: Verify Tool Filtering is Active**
+- Should show **87 tools** active (not 145)
+- Verify `agent/mcp-tool-filter.json` is loaded
+
+### Verification Checklist
+
+- [ ] Global rules files exist (4 files in `agent/rules-{mode}/`)
+- [ ] Symlink created: `ls -la agent/roo-code-settings.json`
+- [ ] Qdrant memory initialized: `recall_context(project="your-project")`
+- [ ] 3SV protocol active: Tests pass
+- [ ] Tool filtering applied: 87 tools active
+- [ ] All 29 unit tests pass
+
+### Cross-Project Queries (Consolidated Registry Pattern)
+
+For projects that need to query data from other projects:
+
+```bash
+# Store cross-project references in qdrant-memory-mcp namespace
+memorize_context(
+  project="qdrant-memory-mcp",
+  content="## Cross-Project Registry: your-project\n[Links to your project data]",
+  tags=["cross-project", "registry", "your-project"]
+)
+
+# Query from your project
+recall_context(
+  project="qdrant-memory-mcp",
+  query="your-project cross-project registry"
+)
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Symlink fails | Ensure `~/.roo/rules-code/settings/roo-code-settings.json` exists |
+| Qdrant memory empty | Run `memorize_context()` to initialize project context |
+| Tests fail | Check that GitNexus index is fresh: `npx gitnexus analyze` |
+| Tool filtering not applied | Verify `agent/mcp-tool-filter.json` exists and is loaded |
+| Cross-project queries fail | Use Consolidated Registry Pattern via qdrant-memory-mcp namespace |
+
+### Reference Documentation
+
+- **Complete Deployment Guide:** [`.ai-memory/THREE-BRAIN-DEPLOYMENT-PROMPT.md`](.ai-memory/THREE-BRAIN-DEPLOYMENT-PROMPT.md)
+- **Global Rules System:** [`ROO_CODE_CONTEXT.md`](ROO_CODE_CONTEXT.md) (lines 72-99)
+- **Test Suite:** [`tests/phase-5a-3sv-unit-tests.sh`](tests/phase-5a-3sv-unit-tests.sh)
+- **Configuration:** [`agent/roo-code-settings.json`](agent/roo-code-settings.json)
+- **Tool Filter:** [`agent/mcp-tool-filter.json`](agent/mcp-tool-filter.json)
+
+---
+
 ## Contributing
 
 ### Development Workflow
@@ -891,7 +1005,8 @@ MIT License — See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Last Updated:** 2026-05-04  
-**Status:** Phases 1-5 Complete — Phase 6 (Qdrant Optimization) Planned  
-**Production Ready:** ✅ YES (100% test pass rate, zero breaking changes)  
+**Last Updated:** 2026-05-11
+**Status:** Phases 1-6 Complete — Phase 7 (Monitoring & Observability) Planned
+**Production Ready:** ✅ YES (100% test pass rate, zero breaking changes)
+**Cross-Project Deployment:** ✅ READY (See [Cross-Project Deployment (Phase 6)](#cross-project-deployment-phase-6))
 **Maintainer:** Dietrich Schmidt (@dschmidtadv)
