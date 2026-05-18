@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 of Three-Brain Architecture",
   "purpose": "Strip dangerous, noisy, and low-value tools from MCP servers to reduce context window pressure",
-  "lastUpdated": "2026-05-04",
+  "lastUpdated": "2026-05-11",
   "filterRules": {
     "github": {
       "description": "GitHub MCP Server - Filter dangerous repository operations",
@@ -49,6 +49,53 @@
       "description": "Qdrant Memory MCP Server - No dangerous tools",
       "status": "SAFE",
       "rationale": "Only memorize_context and recall_context. Both are safe semantic operations."
+    },
+    "aws-core": {
+      "description": "AWS Agent Toolkit MCP Server - Strict allowlist for read-only observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "aws_cloudwatch_get_metric_statistics",
+        "aws_cloudwatch_list_metrics",
+        "aws_cloudwatch_describe_alarms",
+        "aws_cloudwatch_get_log_events",
+        "aws_ecs_describe_services",
+        "aws_ecs_describe_tasks",
+        "aws_ecs_list_services",
+        "aws_ecs_list_tasks",
+        "aws_ec2_describe_instances",
+        "aws_ec2_describe_security_groups",
+        "aws_rds_describe_db_instances",
+        "aws_lambda_get_function",
+        "aws_lambda_list_functions",
+        "aws_s3_list_buckets",
+        "aws_s3_head_bucket",
+        "aws_dynamodb_describe_table",
+        "aws_dynamodb_list_tables",
+        "search_documentation",
+        "retrieve_skill"
+      ],
+      "blockedTools": [
+        "aws_ec2_run_instances",
+        "aws_ec2_terminate_instances",
+        "aws_ec2_stop_instances",
+        "aws_ec2_start_instances",
+        "aws_rds_create_db_instance",
+        "aws_rds_delete_db_instance",
+        "aws_rds_modify_db_instance",
+        "aws_lambda_create_function",
+        "aws_lambda_delete_function",
+        "aws_lambda_update_function_code",
+        "aws_s3_put_object",
+        "aws_s3_delete_object",
+        "aws_dynamodb_put_item",
+        "aws_dynamodb_delete_item",
+        "aws_iam_create_user",
+        "aws_iam_delete_user",
+        "aws_iam_attach_user_policy",
+        "aws_iam_detach_user_policy"
+      ],
+      "rationale": "Expose ONLY read-only observability tools (CloudWatch metrics/logs, ECS/EC2/RDS/Lambda/S3/DynamoDB describe operations) plus documentation retrieval. Block all mutation operations (create, delete, modify, put, attach) to prevent accidental infrastructure changes. Include search_documentation and retrieve_skill for troubleshooting guidance.",
+      "tokenProtection": "Strict allowlist prevents context bloat from unused mutation tools and reduces token tax by ~35% compared to full AWS toolkit exposure"
     }
   },
   "implementation": {
@@ -64,21 +111,27 @@
       "2. Add noisy tools to github.disabledTools",
       "3. Add low-value tools to github.disabledTools",
       "4. Verify no overlap with alwaysAllow list",
-      "5. Test tool availability after filtering"
+      "5. Test tool availability after filtering",
+      "6. For aws-core: Configure allowlist in mcp_settings.json to expose ONLY listed tools",
+      "7. Verify aws-core mutation tools are blocked"
     ]
   },
   "expectedOutcome": {
-    "baseline": "This file documents GitHub-server-only filtering. For full system totals (all 4 MCP servers), see ROO_CODE_CONTEXT.md.",
-    "toolReduction": "GitHub server: ~60 → ~20 tools (67% reduction)",
-    "totalToolCount": "GitHub server only: ~72 → ~52 tools (28% reduction). Full system: 145 → 87 tools (42% reduction) — see ROO_CODE_CONTEXT.md.",
-    "safetyLevel": "HIGH - No loss of core functionality",
-    "riskLevel": "LOW - Only removes dangerous/noisy tools"
+    "baseline": "This file documents GitHub-server-only filtering plus AWS toolkit allowlist. For full system totals (all 5 MCP servers), see ROO_CODE_CONTEXT.md.",
+    "toolReduction": "GitHub server: ~60 → ~20 tools (67% reduction). AWS toolkit: ~150 → ~20 tools (87% reduction)",
+    "totalToolCount": "GitHub server only: ~72 → ~52 tools (28% reduction). AWS toolkit: ~150 → ~20 tools (87% reduction). Full system: 295 → 107 tools (64% reduction) — see ROO_CODE_CONTEXT.md.",
+    "safetyLevel": "CRITICAL - AWS toolkit mutation operations completely blocked",
+    "riskLevel": "MINIMAL - Only read-only observability and documentation retrieval exposed"
   },
   "verification": {
     "checklist": [
       "[ ] GitHub MCP server loads without errors",
       "[ ] Dangerous tools (delete_repository, etc.) are not available",
       "[ ] Core tools (list_issues, create_branch, push_files) still work",
+      "[ ] AWS toolkit loads with allowlist only",
+      "[ ] AWS mutation tools (run_instances, delete_db_instance, etc.) are blocked",
+      "[ ] AWS observability tools (describe_*, list_*, get_*) are available",
+      "[ ] search_documentation and retrieve_skill are available",
       "[ ] No tool conflicts or duplicates",
       "[ ] Tool count reduced as expected"
     ]

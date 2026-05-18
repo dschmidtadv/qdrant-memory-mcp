@@ -113,10 +113,126 @@ python3 skills/jira-manager/scripts/jira_client.py update AQD-123 \
 
 ### Step 5: Add Comments
 
+#### Plain Text Comment
+
 ```bash
 python3 skills/jira-manager/scripts/jira_client.py comment AQD-123 \
   --body "Investigation complete. Root cause identified: DEXI API integration inefficiency."
 ```
+
+#### Comment with JIRA Markup (Recommended)
+
+Always use JIRA markup for structured comments:
+
+```bash
+python3 skills/jira-manager/scripts/jira_client.py comment AQD-123 \
+  --body "h2. Investigation Complete
+
+h3. Root Cause
+* DEXI API integration inefficiency
+* Connection pool exhaustion
+
+h3. Impact
+* 50% performance degradation
+* User-facing latency
+
+h3. Resolution
+* Implemented connection pooling optimization
+* Added circuit breaker pattern
+
+||Metric||Before||After||
+|Response Time|1224ms|200ms|
+|RPS|8.17|50+|"
+```
+
+#### JIRA Markup Reference
+
+Use these formatting options in comment bodies:
+
+**Headings:**
+- `h1. Heading 1`
+- `h2. Heading 2`
+- `h3. Heading 3`
+- `h4. Heading 4`
+
+**Lists:**
+- `* Bullet point`
+- `** Nested bullet`
+- `# Numbered item`
+- `## Nested numbered`
+
+**Tables:**
+```
+||Header 1||Header 2||Header 3||
+|Cell 1|Cell 2|Cell 3|
+|Cell 4|Cell 5|Cell 6|
+```
+
+**Text Formatting:**
+- `*bold*` → **bold**
+- `_italic_` → _italic_
+- `??citation??` → citation
+- `-strikethrough-` → ~~strikethrough~~
+- `+inserted+` → inserted
+- `^superscript^` → superscript
+- `~subscript~` → subscript
+
+**Code:**
+- `{{monospace}}` → monospace
+- `{code}code block{code}` → code block
+- `{code:language=python}...{code}` → syntax highlighted
+
+**Links:**
+- `[Link Text|https://example.com]`
+- `[EHCD-3201]` → link to issue
+- `[~username]` → mention user
+
+**Example with All Formatting:**
+
+```bash
+python3 skills/jira-manager/scripts/jira_client.py comment EHCD-3201 \
+  --body "h2. Performance Optimization Complete ✅
+
+h3. Implementation Summary
+
+h4. P0 Fixes (Critical) ✅
+* Enable page caching globally
+* Remove duplicate redis.so extension
+
+h4. P1 OPcache Tuning (Core) ✅
+* Add opcache-recommended.ini with 9 parameters
+* Add Xdebug build-time assertion
+
+h3. Verification Results
+
+h4. Puppeteer Tests ✅
+* Test 1: Page Cache Enabled - PASSED
+** First request: HIT
+** Second request: HIT
+
+h4. Apache Bench (100 requests, 10 concurrent) ✅
+* Cache-Control: max-age=86400, public
+* X-Drupal-Cache: HIT
+* 0 Failed Requests
+
+h3. Performance Impact
+
+||Metric||Before||After||
+|Page Cache Status|DISABLED|HIT (ENABLED)|
+|Cache-Control|None|max-age=86400, public|
+|Expected RPS|8.17|50-100+|
+|Expected Response Time|1224ms|<200ms (cached)|
+
+h3. Next Steps
+
+# Code review of PR #98
+# Run full test suite in staging
+# Merge to develop
+# Deploy to production
+
+See [EHCD-3201] for details."
+```
+
 
 ### Step 6: List Available Transitions
 
@@ -331,6 +447,42 @@ Available link types:
 - `initiative` — Link to Initiative (customfield_11022)
 
 **Note:** Link fields must be configured on issue screens in JIRA Project Settings.
+
+#### `release-notes`
+Generate release notes from JIRA issues by fixVersion, label, or epic.
+
+```bash
+python3 jira_client.py release-notes \
+  --version "Deployment 202604.01" \
+  --strategy fixversion \
+  --output release_notes.md
+```
+
+Options:
+- `--version` — Release version to search for (required)
+- `--strategy` — Search strategy: `fixversion` (default), `label`, `epic`, `project`
+- `--output` — Output file path (default: stdout)
+- `--json` — Output JSON instead of Markdown
+
+Search strategies:
+- `fixversion` — Search by JIRA fixVersion field
+- `label` — Search by label (e.g., `release-<version>`)
+- `epic` — Search by epic link
+- `project` — Search by project and label
+
+Example output:
+```markdown
+## Release Deployment 202604.01
+
+### Features
+- [EHCD-3293](https://cmext.ahrq.gov/jira/browse/EHCD-3293): Implement GitHub Release automation
+
+### Bug Fixes
+- [EHCD-3084](https://cmext.ahrq.gov/jira/browse/EHCD-3084): Search pages not cached
+
+**Total Issues:** 31
+**Release Date:** 2026-05-18
+```
 
 ## Error Handling
 
