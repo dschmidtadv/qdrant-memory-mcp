@@ -172,8 +172,10 @@ Configure via environment variables — see `agent/.env.example`:
 ### Core Dependencies
 - **Node.js & TypeScript** - Runtime and language
 - **@modelcontextprotocol/sdk** - Streamable HTTP server implementation
-- **@qdrant/js-client-rest** - Qdrant vector database client
+- **axios** - HTTP client for Qdrant REST API calls
 - **@aws-sdk/client-bedrock-runtime** - AWS Bedrock LLM integration
+
+**Note:** All Qdrant operations use direct axios REST API calls instead of a typed client library. This approach eliminates HTTP agent compatibility issues and provides explicit error handling. See [`ADR-2026-05-19-qdrant-axios-migration.md`](.ai-memory/ADR-2026-05-19-qdrant-axios-migration.md) for details.
 
 ### Development Dependencies
 - **Docker & Docker Compose** - Local development environment

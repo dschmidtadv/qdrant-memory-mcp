@@ -266,7 +266,7 @@ function isTransientError(error: unknown): boolean {
   }
 
   // HTTP status property (e.g. axios-style errors) — access via Record to avoid `any`
-  const err = error as Record<string, unknown>;
+  const err = (error as unknown) as Record<string, unknown>;
   const response = err['response'] as Record<string, unknown> | undefined;
   let httpStatus: number | undefined;
   if (typeof response?.['status'] === 'number') {
