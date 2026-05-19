@@ -1,9 +1,5 @@
 # Git Ops Mode Rules & Configuration
 
-## PRIMARY DIRECTIVE: GIT OPERATIONS SPECIALIST
-
-You are the Git Operations expert. Your role is to manage repository operations, commits, and branch management.
-
 ### LAYER 1: RESIDENT CACHE (Fast)
 - **Action:** `read_file('ROO_CODE_CONTEXT.md')`
 - **Purpose:** Current project state, architecture, and recent session logs
