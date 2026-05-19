@@ -17,3 +17,5 @@ ollama_data/
 agent/roo-code-settings-resolved.json
 agent/roo-code-settings.json050126.json
 .ai-memory/
+.claude/skills/gitnexus/gitnexus-exploring/SKILL.md
+.codemap/

@@ -31,7 +31,9 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 ROO_HOME="${HOME}/.roo"
+CLAUDE_SKILLS_DIR="${HOME}/.claude/skills"
 AGENT_DIR="${PROJECT_ROOT}/agent"
+SKILLS_SOURCE_DIR="${AGENT_DIR}/skills"
 SETTINGS_SOURCE="${AGENT_DIR}/roo-code-settings.json"
 
 # Counters for summary
@@ -194,6 +196,63 @@ create_settings_symlink() {
   return 0
 }
 
+# Sync agent/skills/* to ~/.claude/skills/
+# Copies each skill directory that contains a SKILL.md with valid frontmatter.
+# Skips directories without SKILL.md or with missing name: frontmatter.
+sync_skills() {
+  echo ""
+  log_info "Syncing skills to ${CLAUDE_SKILLS_DIR}..."
+  echo ""
+
+  # Ensure ~/.claude/skills exists
+  if [[ ! -d "$CLAUDE_SKILLS_DIR" ]]; then
+    log_info "Creating ${CLAUDE_SKILLS_DIR}..."
+    mkdir -p "$CLAUDE_SKILLS_DIR"
+  fi
+
+  if [[ ! -d "$SKILLS_SOURCE_DIR" ]]; then
+    log_warning "No skills source directory found at $SKILLS_SOURCE_DIR — skipping"
+    return 0
+  fi
+
+  local synced=0
+  local skipped_no_skill=0
+  local skipped_no_frontmatter=0
+
+  for skill_dir in "$SKILLS_SOURCE_DIR"/*/; do
+    [[ -d "$skill_dir" ]] || continue
+
+    local skill_name
+    skill_name=$(basename "$skill_dir")
+    local skill_md="${skill_dir}SKILL.md"
+
+    # Skip if no SKILL.md present
+    if [[ ! -f "$skill_md" ]]; then
+      log_warning "Skipping ${skill_name}: no SKILL.md found"
+      ((skipped_no_skill++))
+      continue
+    fi
+
+    # Skip if SKILL.md has no YAML frontmatter name: field
+    if ! grep -q "^name:" "$skill_md" 2>/dev/null; then
+      log_warning "Skipping ${skill_name}: SKILL.md missing 'name:' frontmatter"
+      ((skipped_no_frontmatter++))
+      continue
+    fi
+
+    local dest="${CLAUDE_SKILLS_DIR}/${skill_name}"
+
+    # Copy (overwrite) the skill directory
+    cp -r "$skill_dir" "$dest"
+    log_success "Synced skill: ${skill_name} → ${dest}"
+    ((synced++))
+    ((CREATED++))
+  done
+
+  echo ""
+  log_info "Skills sync complete: ${synced} synced, ${skipped_no_skill} skipped (no SKILL.md), ${skipped_no_frontmatter} skipped (no frontmatter)"
+}
+
 # Validate all symlinks after creation
 validate_symlinks() {
   local valid=0
@@ -287,7 +346,11 @@ main() {
   echo ""
   create_settings_symlink
   echo ""
-  
+
+  # Sync skills to ~/.claude/skills/
+  sync_skills
+  echo ""
+
   # Validate all symlinks
   if validate_symlinks; then
     echo ""
