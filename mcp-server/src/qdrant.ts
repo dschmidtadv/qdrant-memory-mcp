@@ -1,4 +1,3 @@
-import { QdrantClient } from '@qdrant/js-client-rest';
 import axios from 'axios';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
@@ -14,17 +13,33 @@ console.error(`Connecting to Qdrant at: ${QDRANT_URL}`);
 console.error(`Environment: ${process.env.NODE_ENV || 'local'}`);
 console.error(`Collection: ${COLLECTION_NAME} (${VECTOR_SIZE}-dim)`);
 
-const client = new QdrantClient({ url: QDRANT_URL });
+// Use axios directly to avoid QdrantClient HTTP agent issues
+const axiosClient = axios.create({
+  baseURL: QDRANT_URL,
+  timeout: 30000,
+  validateStatus: () => true  // Don't throw on any status code
+});
 
 export async function initializeQdrant(): Promise<void> {
   try {
-    // Check if collection exists
-    const collections = await client.getCollections();
-    const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
+    console.error('[initializeQdrant] Starting initialization...');
+    
+    // Check if collection exists using REST API
+    console.error('[initializeQdrant] Fetching collections...');
+    const response = await axiosClient.get('/collections');
+    
+    if (response.status !== 200) {
+      throw new Error(`Failed to fetch collections: ${response.status} ${JSON.stringify(response.data)}`);
+    }
+    
+    const collections = response.data?.result?.collections || [];
+    console.error(`[initializeQdrant] Found ${collections.length} collections`);
+    const exists = collections.some((c: any) => c.name === COLLECTION_NAME);
     
     if (!exists) {
       // Create collection with environment-specific vector size
-      await client.createCollection(COLLECTION_NAME, {
+      console.error(`[initializeQdrant] Creating collection: ${COLLECTION_NAME}`);
+      const createResponse = await axiosClient.put(`/collections/${COLLECTION_NAME}`, {
         vectors: {
           size: VECTOR_SIZE,
           distance: 'Cosine'
@@ -34,6 +49,11 @@ export async function initializeQdrant(): Promise<void> {
           ef_construct: 200
         }
       });
+      
+      if (createResponse.status !== 200) {
+        throw new Error(`Failed to create collection: ${createResponse.status} ${JSON.stringify(createResponse.data)}`);
+      }
+      
       console.error(`Created collection: ${COLLECTION_NAME} (${VECTOR_SIZE}-dim)`);
     } else {
       console.error(`Collection ${COLLECTION_NAME} already exists`);
@@ -46,9 +66,14 @@ export async function initializeQdrant(): Promise<void> {
 
 export async function upsertVectors(vectors: any[]): Promise<number> {
   try {
-    await client.upsert(COLLECTION_NAME, {
+    const response = await axiosClient.put(`/collections/${COLLECTION_NAME}/points`, {
       points: vectors
     });
+    
+    if (response.status !== 200) {
+      throw new Error(`Failed to upsert vectors: ${response.status} ${JSON.stringify(response.data)}`);
+    }
+    
     return vectors.length;
   } catch (error) {
     console.error('Failed to upsert vectors:', error);

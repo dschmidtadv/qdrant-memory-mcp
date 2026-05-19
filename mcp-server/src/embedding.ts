@@ -9,8 +9,15 @@ const NODE_ENV = process.env.NODE_ENV || 'local';
 // Environment-specific vector dimensions
 const VECTOR_SIZE = NODE_ENV === 'production' ? 1024 : 768;
 
-// Reuse a single Bedrock client instance to avoid per-call connection overhead
-const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// Lazy-initialize Bedrock client only when needed (production mode)
+let bedrockClient: BedrockRuntimeClient | null = null;
+
+function getBedrockClient(): BedrockRuntimeClient {
+  if (!bedrockClient) {
+    bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
+  }
+  return bedrockClient;
+}
 
 export async function getEmbedding(text: string): Promise<number[]> {
   if (NODE_ENV === 'local') {
@@ -48,7 +55,7 @@ async function getBedrockEmbedding(text: string): Promise<number[]> {
         dimensions: VECTOR_SIZE
       })
     });
-    const response = await bedrockClient.send(command);
+    const response = await getBedrockClient().send(command);
     const result = JSON.parse(new TextDecoder().decode(response.body));
     
     // Return full embedding without truncation
