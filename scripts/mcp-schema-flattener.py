@@ -39,7 +39,7 @@ def debug_log(msg: str) -> None:
         sys.stderr.flush()
 
 
-def flatten_defs(schema: Dict[str, Any], _seen: Optional[set] = None) -> Dict[str, Any]:
+def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Inline all $defs references in a JSON Schema.
     
@@ -102,7 +102,7 @@ def flatten_defs(schema: Dict[str, Any], _seen: Optional[set] = None) -> Dict[st
         else:
             return node
     
-    return resolve_refs(copy.deepcopy(schema))
+    return resolve_refs(schema)
 
 
 def patch_tools_list_response(msg: Dict[str, Any]) -> Dict[str, Any]:
@@ -212,7 +212,7 @@ def main() -> None:
     # Relay stdin to subprocess
     try:
         while True:
-            line = sys.stdin.buffer.read(4096)
+            line = sys.stdin.buffer.readline()
             if not line:
                 debug_log("stdin: EOF reached")
                 break
