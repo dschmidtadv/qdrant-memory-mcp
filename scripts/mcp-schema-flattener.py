@@ -26,7 +26,17 @@ import json
 import subprocess
 import threading
 import copy
+import os
 from typing import Any, Dict, Optional
+
+# Debug mode: set MCP_FLATTENER_DEBUG=1 to enable logging
+DEBUG = os.environ.get('MCP_FLATTENER_DEBUG', '0') == '1'
+
+def debug_log(msg: str) -> None:
+    """Log debug message to stderr if DEBUG is enabled."""
+    if DEBUG:
+        sys.stderr.write(f"[mcp-schema-flattener] {msg}\n")
+        sys.stderr.flush()
 
 
 def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,22 +118,29 @@ def relay_stdio(subprocess_obj: subprocess.Popen) -> None:
         while True:
             line = subprocess_obj.stdout.readline()
             if not line:
+                debug_log("stdout: EOF reached")
                 break
             
             line_str = line.decode("utf-8", errors="replace").rstrip("\n")
+            debug_log(f"stdout: received {len(line_str)} bytes")
             
             try:
                 msg = json.loads(line_str)
+                debug_log(f"stdout: parsed JSON, method={msg.get('method')}")
                 
                 # Patch tools/list responses
                 if isinstance(msg, dict) and msg.get("method") == "tools/list":
+                    debug_log("stdout: patching tools/list response")
                     msg = patch_tools_list_response(msg)
                 
                 # Write patched message to stdout
-                sys.stdout.write(json.dumps(msg) + "\n")
+                output = json.dumps(msg) + "\n"
+                sys.stdout.write(output)
                 sys.stdout.flush()
-            except json.JSONDecodeError:
+                debug_log(f"stdout: relayed {len(output)} bytes")
+            except json.JSONDecodeError as e:
                 # Not JSON, pass through unchanged
+                debug_log(f"stdout: not JSON, passing through ({e})")
                 sys.stdout.write(line_str + "\n")
                 sys.stdout.flush()
     except Exception as e:
@@ -140,6 +157,7 @@ def relay_stderr(subprocess_obj: subprocess.Popen) -> None:
         while True:
             line = subprocess_obj.stderr.readline()
             if not line:
+                debug_log("stderr: EOF reached")
                 break
             sys.stderr.write(line.decode("utf-8", errors="replace"))
             sys.stderr.flush()
@@ -157,6 +175,8 @@ def main() -> None:
         )
         sys.exit(1)
     
+    debug_log(f"Starting with command: {' '.join(sys.argv[1:])}")
+    
     # Spawn the real MCP server
     command = sys.argv[1:]
     try:
@@ -165,8 +185,9 @@ def main() -> None:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=0,  # Unbuffered
+            bufsize=1,  # Line buffered (changed from 0 unbuffered)
         )
+        debug_log(f"Subprocess spawned with PID {proc.pid}")
     except FileNotFoundError as e:
         sys.stderr.write(f"[mcp-schema-flattener] Failed to spawn subprocess: {e}\n")
         sys.exit(1)
@@ -176,25 +197,32 @@ def main() -> None:
     stderr_thread = threading.Thread(target=relay_stderr, args=(proc,), daemon=True)
     stdout_thread.start()
     stderr_thread.start()
+    debug_log("Relay threads started")
     
     # Relay stdin to subprocess
     try:
         while True:
             line = sys.stdin.buffer.read(4096)
             if not line:
+                debug_log("stdin: EOF reached")
                 break
+            debug_log(f"stdin: received {len(line)} bytes")
             proc.stdin.write(line)
             proc.stdin.flush()
     except (BrokenPipeError, KeyboardInterrupt):
+        debug_log("stdin: broken pipe or keyboard interrupt")
         pass
     finally:
         try:
             proc.stdin.close()
+            debug_log("stdin: closed")
         except:
             pass
     
     # Wait for subprocess to exit
+    debug_log("Waiting for subprocess to exit...")
     exit_code = proc.wait()
+    debug_log(f"Subprocess exited with code {exit_code}")
     sys.exit(exit_code)
 
 
