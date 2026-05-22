@@ -41,36 +41,35 @@ def debug_log(msg: str) -> None:
 
 def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Inline all $defs references in a JSON Schema.
+    Inline all $defs references in a JSON Schema (improved algorithm).
     
-    Converts:
-        {
-            "type": "object",
-            "properties": {
-                "user": { "$ref": "#/$defs/User" }
-            },
-            "$defs": {
-                "User": { "type": "object", "properties": { "id": { "type": "string" } } }
-            }
-        }
-    
-    To:
-        {
-            "type": "object",
-            "properties": {
-                "user": { "type": "object", "properties": { "id": { "type": "string" } } }
-            }
-        }
+    Handles nested $defs at multiple levels and complex cross-references.
+    Strategy: Build a global $defs registry, then resolve all references.
     """
     if not isinstance(schema, dict):
         return schema
     
-    defs = schema.get("$defs", {})
-    if not defs:
+    # Step 1: Collect all $defs from all levels into a global registry
+    global_defs: Dict[str, Any] = {}
+    
+    def collect_defs(node: Any) -> None:
+        """Recursively collect all $defs from nested schemas."""
+        if isinstance(node, dict):
+            if "$defs" in node:
+                global_defs.update(node["$defs"])
+            for value in node.values():
+                collect_defs(value)
+        elif isinstance(node, list):
+            for item in node:
+                collect_defs(item)
+    
+    collect_defs(schema)
+    if not global_defs:
         return schema
     
+    # Step 2: Resolve all $ref references using the global registry
     def resolve_refs(node: Any, _seen_refs: Optional[set] = None) -> Any:
-        """Recursively resolve $ref references and remove $defs."""
+        """Recursively resolve $ref references."""
         if _seen_refs is None:
             _seen_refs = set()
         
@@ -81,21 +80,20 @@ def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
                 if ref.startswith("#/$defs/"):
                     def_name = ref[len("#/$defs/"):]
                     # Prevent circular references
-                    if def_name not in _seen_refs and def_name in defs:
+                    if def_name not in _seen_refs and def_name in global_defs:
                         _seen_refs.add(def_name)
                         # Recursively resolve the referenced definition
-                        result = resolve_refs(copy.deepcopy(defs[def_name]), _seen_refs)
+                        result = resolve_refs(copy.deepcopy(global_defs[def_name]), _seen_refs)
                         _seen_refs.discard(def_name)
                         return result
                     elif def_name in _seen_refs:
                         debug_log(f"Circular reference detected: {ref}")
                         return node  # Return unresolved to prevent infinite loop
             
-            # Recursively process all values, excluding $defs
+            # Recursively process all values, including $defs
             result = {}
             for key, value in node.items():
-                if key != "$defs":
-                    result[key] = resolve_refs(value, _seen_refs)
+                result[key] = resolve_refs(value, _seen_refs)
             return result
         elif isinstance(node, list):
             return [resolve_refs(item, _seen_refs) for item in node]
