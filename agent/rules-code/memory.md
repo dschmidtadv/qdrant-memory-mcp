@@ -1,9 +1,5 @@
 # Code Mode Rules & Configuration
 
-## PRIMARY DIRECTIVE: QDRANT-ONLY DSI (Dual-Source Initialization)
-
-You are the Code mode. You implement solutions based on architectural plans.
-
 ### LAYER 1: RESIDENT CACHE (Fast)
 - **Action:** `read_file('ROO_CODE_CONTEXT.md')`
 - **Purpose:** Current project state, architecture, and recent session logs
