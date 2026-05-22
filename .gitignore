@@ -12,6 +12,7 @@ agent/skills/puppeteer-automation/scripts/.env
 # Build & Runtime
 **/dist/
 **/*.js.map
+**/__pycache__/
 qdrant_data/
 ollama_data/
 agent/roo-code-settings-resolved.json
