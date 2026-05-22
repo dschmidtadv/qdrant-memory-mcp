@@ -87,6 +87,65 @@
         "get_documentation"
       ],
       "rationale": "AWS service documentation search and retrieval for troubleshooting guidance."
+    },
+    "aws-lambda": {
+      "description": "AWS Lambda MCP Server - Phase 2 Security & Compute",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_functions",
+        "get_function",
+        "get_function_code_location",
+        "invoke_function",
+        "create_function",
+        "update_function_code",
+        "update_function_configuration",
+        "delete_function",
+        "list_layers",
+        "get_layer_version",
+        "publish_layer_version",
+        "delete_layer_version",
+        "list_aliases",
+        "create_alias",
+        "update_alias",
+        "delete_alias",
+        "get_policy",
+        "add_permission",
+        "remove_permission"
+      ],
+      "rationale": "Lambda function management, code deployment, layer management, and permission configuration. Includes both read and write operations for devops-engineer mode."
+    },
+    "aws-iam": {
+      "description": "AWS IAM MCP Server - Phase 2 Security & Compute",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_users",
+        "get_user",
+        "list_groups",
+        "get_group",
+        "list_roles",
+        "get_role",
+        "list_policies",
+        "get_policy",
+        "get_policy_version",
+        "list_policy_versions",
+        "list_user_policies",
+        "get_user_policy",
+        "list_group_policies",
+        "get_group_policy",
+        "list_role_policies",
+        "get_role_policy",
+        "list_attached_user_policies",
+        "list_attached_group_policies",
+        "list_attached_role_policies",
+        "get_role_trust_policy",
+        "simulate_principal_policy",
+        "simulate_custom_policy",
+        "list_access_keys",
+        "get_access_key_last_used",
+        "list_mfa_devices",
+        "list_virtual_mfa_devices"
+      ],
+      "rationale": "Read-only IAM policy analysis, role inspection, and permission simulation for security-review and cloud-architect modes. No mutation operations exposed."
     }
   },
   "implementation": {
