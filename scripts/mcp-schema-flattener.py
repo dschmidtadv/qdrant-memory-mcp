@@ -39,7 +39,7 @@ def debug_log(msg: str) -> None:
         sys.stderr.flush()
 
 
-def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
+def flatten_defs(schema: Dict[str, Any], _seen: Optional[set] = None) -> Dict[str, Any]:
     """
     Inline all $defs references in a JSON Schema.
     
@@ -69,26 +69,36 @@ def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
     if not defs:
         return schema
     
-    def resolve_refs(node: Any) -> Any:
+    def resolve_refs(node: Any, _seen_refs: Optional[set] = None) -> Any:
         """Recursively resolve $ref references and remove $defs."""
+        if _seen_refs is None:
+            _seen_refs = set()
+        
         if isinstance(node, dict):
             # If this node has a $ref, resolve it
             if "$ref" in node:
                 ref = node["$ref"]
                 if ref.startswith("#/$defs/"):
                     def_name = ref[len("#/$defs/"):]
-                    if def_name in defs:
+                    # Prevent circular references
+                    if def_name not in _seen_refs and def_name in defs:
+                        _seen_refs.add(def_name)
                         # Recursively resolve the referenced definition
-                        return resolve_refs(copy.deepcopy(defs[def_name]))
+                        result = resolve_refs(copy.deepcopy(defs[def_name]), _seen_refs)
+                        _seen_refs.discard(def_name)
+                        return result
+                    elif def_name in _seen_refs:
+                        debug_log(f"Circular reference detected: {ref}")
+                        return node  # Return unresolved to prevent infinite loop
             
             # Recursively process all values, excluding $defs
             result = {}
             for key, value in node.items():
                 if key != "$defs":
-                    result[key] = resolve_refs(value)
+                    result[key] = resolve_refs(value, _seen_refs)
             return result
         elif isinstance(node, list):
-            return [resolve_refs(item) for item in node]
+            return [resolve_refs(item, _seen_refs) for item in node]
         else:
             return node
     
@@ -126,10 +136,10 @@ def relay_stdio(subprocess_obj: subprocess.Popen) -> None:
             
             try:
                 msg = json.loads(line_str)
-                debug_log(f"stdout: parsed JSON, method={msg.get('method')}")
+                debug_log(f"stdout: parsed JSON, id={msg.get('id')}")
                 
-                # Patch tools/list responses
-                if isinstance(msg, dict) and msg.get("method") == "tools/list":
+                # Patch tools/list responses (JSON-RPC result with "result" containing "tools")
+                if isinstance(msg, dict) and msg.get("result") and isinstance(msg.get("result"), dict) and "tools" in msg.get("result", {}):
                     debug_log("stdout: patching tools/list response")
                     msg = patch_tools_list_response(msg)
                 
@@ -185,7 +195,7 @@ def main() -> None:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            bufsize=1,  # Line buffered (changed from 0 unbuffered)
+            bufsize=0,  # Unbuffered binary I/O — correct for Python 3.12
         )
         debug_log(f"Subprocess spawned with PID {proc.pid}")
     except FileNotFoundError as e:
