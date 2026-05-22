@@ -89,7 +89,7 @@
       "rationale": "AWS service documentation search and retrieval for troubleshooting guidance."
     },
     "aws-lambda": {
-      "description": "AWS Lambda MCP Server - Phase 2 Security & Compute",
+      "description": "AWS Lambda Tool MCP Server - Phase 2 Security & Compute (awslabs.lambda-tool-mcp-server)",
       "strategy": "ALLOWLIST_ONLY",
       "allowedTools": [
         "list_functions",
