@@ -1,8 +1,41 @@
 {
-  "version": "1.0.0",
-  "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 of Three-Brain Architecture",
+  "version": "2.0.0",
+  "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 & 2 of Three-Brain Architecture",
   "purpose": "Strip dangerous, noisy, and low-value tools from MCP servers to reduce context window pressure",
-  "lastUpdated": "2026-05-11",
+  "lastUpdated": "2026-05-22",
+  "implementationStatus": {
+    "phase1": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-ecs": "ACTIVE - 10 tools registered",
+        "aws-cloudwatch": "BLOCKED - see knownBugs",
+        "aws-documentation": "BLOCKED - see knownBugs"
+      }
+    },
+    "phase2": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-lambda": "ACTIVE - 17 Lambda functions registered as individual tools",
+        "aws-iam": "BLOCKED - see knownBugs"
+      }
+    }
+  },
+  "knownBugs": {
+    "defs_schema_incompatibility": {
+      "issue": "https://github.com/dschmidtadv/qdrant-memory-mcp/issues/56",
+      "description": "@arvoretech/mcp-proxy v1.14.1 cannot register tools from servers whose ListToolsRequest response contains JSON Schema $defs references",
+      "affectedServers": ["aws-cloudwatch", "aws-documentation", "aws-iam"],
+      "errors": {
+        "aws-iam": "can't resolve reference #/$defs/IamUser from id #",
+        "aws-cloudwatch": "can't resolve reference #/$defs/LogGroupMetadata from id #",
+        "aws-documentation": "can't resolve reference #/$defs/SearchResult from id #"
+      },
+      "workaround": "None available in mcp-proxy v1.14.1 (latest). Awaiting upstream fix.",
+      "fixedIn": "TBD"
+    }
+  },
   "filterRules": {
     "github": {
       "description": "GitHub MCP Server - Filter dangerous repository operations",
