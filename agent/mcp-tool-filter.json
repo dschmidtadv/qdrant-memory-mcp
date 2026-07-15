@@ -1,8 +1,41 @@
 {
-  "version": "1.0.0",
-  "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 of Three-Brain Architecture",
+  "version": "2.0.0",
+  "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 & 2 of Three-Brain Architecture",
   "purpose": "Strip dangerous, noisy, and low-value tools from MCP servers to reduce context window pressure",
-  "lastUpdated": "2026-05-11",
+  "lastUpdated": "2026-05-22",
+  "implementationStatus": {
+    "phase1": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-ecs": "ACTIVE - 10 tools registered",
+        "aws-cloudwatch": "BLOCKED - see knownBugs",
+        "aws-documentation": "BLOCKED - see knownBugs"
+      }
+    },
+    "phase2": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-lambda": "ACTIVE - 17 Lambda functions registered as individual tools",
+        "aws-iam": "BLOCKED - see knownBugs"
+      }
+    }
+  },
+  "knownBugs": {
+    "defs_schema_incompatibility": {
+      "issue": "https://github.com/dschmidtadv/qdrant-memory-mcp/issues/56",
+      "description": "@arvoretech/mcp-proxy v1.14.1 cannot register tools from servers whose ListToolsRequest response contains JSON Schema $defs references",
+      "affectedServers": ["aws-cloudwatch", "aws-documentation", "aws-iam"],
+      "errors": {
+        "aws-iam": "can't resolve reference #/$defs/IamUser from id #",
+        "aws-cloudwatch": "can't resolve reference #/$defs/LogGroupMetadata from id #",
+        "aws-documentation": "can't resolve reference #/$defs/SearchResult from id #"
+      },
+      "workaround": "None available in mcp-proxy v1.14.1 (latest). Awaiting upstream fix.",
+      "fixedIn": "TBD"
+    }
+  },
   "filterRules": {
     "github": {
       "description": "GitHub MCP Server - Filter dangerous repository operations",
@@ -50,52 +83,102 @@
       "status": "SAFE",
       "rationale": "Only memorize_context and recall_context. Both are safe semantic operations."
     },
-    "aws-core": {
-      "description": "AWS Agent Toolkit MCP Server - Strict allowlist for read-only observability",
+    "aws-ecs": {
+      "description": "AWS ECS MCP Server - Phase 1 Core Observability",
       "strategy": "ALLOWLIST_ONLY",
       "allowedTools": [
-        "aws_cloudwatch_get_metric_statistics",
-        "aws_cloudwatch_list_metrics",
-        "aws_cloudwatch_describe_alarms",
-        "aws_cloudwatch_get_log_events",
-        "aws_ecs_describe_services",
-        "aws_ecs_describe_tasks",
-        "aws_ecs_list_services",
-        "aws_ecs_list_tasks",
-        "aws_ec2_describe_instances",
-        "aws_ec2_describe_security_groups",
-        "aws_rds_describe_db_instances",
-        "aws_lambda_get_function",
-        "aws_lambda_list_functions",
-        "aws_s3_list_buckets",
-        "aws_s3_head_bucket",
-        "aws_dynamodb_describe_table",
-        "aws_dynamodb_list_tables",
+        "describe_clusters",
+        "describe_services",
+        "describe_tasks",
+        "describe_task_definition",
+        "list_clusters",
+        "list_services",
+        "list_tasks",
+        "list_task_definitions"
+      ],
+      "rationale": "Read-only ECS cluster, service, and task inspection. No mutation operations exposed."
+    },
+    "aws-cloudwatch": {
+      "description": "AWS CloudWatch MCP Server - Phase 1 Core Observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "get_metric_statistics",
+        "list_metrics",
+        "describe_alarms",
+        "get_log_events",
+        "describe_log_groups",
+        "describe_log_streams",
+        "filter_log_events"
+      ],
+      "rationale": "Read-only CloudWatch metrics, logs, and alarms. No mutation operations exposed."
+    },
+    "aws-documentation": {
+      "description": "AWS Documentation MCP Server - Phase 1 Core Observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
         "search_documentation",
-        "retrieve_skill"
+        "get_documentation"
       ],
-      "blockedTools": [
-        "aws_ec2_run_instances",
-        "aws_ec2_terminate_instances",
-        "aws_ec2_stop_instances",
-        "aws_ec2_start_instances",
-        "aws_rds_create_db_instance",
-        "aws_rds_delete_db_instance",
-        "aws_rds_modify_db_instance",
-        "aws_lambda_create_function",
-        "aws_lambda_delete_function",
-        "aws_lambda_update_function_code",
-        "aws_s3_put_object",
-        "aws_s3_delete_object",
-        "aws_dynamodb_put_item",
-        "aws_dynamodb_delete_item",
-        "aws_iam_create_user",
-        "aws_iam_delete_user",
-        "aws_iam_attach_user_policy",
-        "aws_iam_detach_user_policy"
+      "rationale": "AWS service documentation search and retrieval for troubleshooting guidance."
+    },
+    "aws-lambda": {
+      "description": "AWS Lambda Tool MCP Server - Phase 2 Security & Compute (awslabs.lambda-tool-mcp-server)",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_functions",
+        "get_function",
+        "get_function_code_location",
+        "invoke_function",
+        "create_function",
+        "update_function_code",
+        "update_function_configuration",
+        "delete_function",
+        "list_layers",
+        "get_layer_version",
+        "publish_layer_version",
+        "delete_layer_version",
+        "list_aliases",
+        "create_alias",
+        "update_alias",
+        "delete_alias",
+        "get_policy",
+        "add_permission",
+        "remove_permission"
       ],
-      "rationale": "Expose ONLY read-only observability tools (CloudWatch metrics/logs, ECS/EC2/RDS/Lambda/S3/DynamoDB describe operations) plus documentation retrieval. Block all mutation operations (create, delete, modify, put, attach) to prevent accidental infrastructure changes. Include search_documentation and retrieve_skill for troubleshooting guidance.",
-      "tokenProtection": "Strict allowlist prevents context bloat from unused mutation tools and reduces token tax by ~35% compared to full AWS toolkit exposure"
+      "rationale": "Lambda function management, code deployment, layer management, and permission configuration. Includes both read and write operations for devops-engineer mode."
+    },
+    "aws-iam": {
+      "description": "AWS IAM MCP Server - Phase 2 Security & Compute",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_users",
+        "get_user",
+        "list_groups",
+        "get_group",
+        "list_roles",
+        "get_role",
+        "list_policies",
+        "get_policy",
+        "get_policy_version",
+        "list_policy_versions",
+        "list_user_policies",
+        "get_user_policy",
+        "list_group_policies",
+        "get_group_policy",
+        "list_role_policies",
+        "get_role_policy",
+        "list_attached_user_policies",
+        "list_attached_group_policies",
+        "list_attached_role_policies",
+        "get_role_trust_policy",
+        "simulate_principal_policy",
+        "simulate_custom_policy",
+        "list_access_keys",
+        "get_access_key_last_used",
+        "list_mfa_devices",
+        "list_virtual_mfa_devices"
+      ],
+      "rationale": "Read-only IAM policy analysis, role inspection, and permission simulation for security-review and cloud-architect modes. No mutation operations exposed."
     }
   },
   "implementation": {
