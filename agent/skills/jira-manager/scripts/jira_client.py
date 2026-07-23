@@ -3,9 +3,25 @@
 JIRA Manager - Programmatic JIRA ticket management CLI
 Supports Jira Cloud and Jira Server/Data Center instances
 Uses stdlib urllib only - no external dependencies required
+
+Cross-repo invocation: this script can be called from ANY working directory.
+sys.path is patched at startup so jira_config is always importable regardless
+of where the caller's cwd is.
 """
 
 import sys
+import os
+from pathlib import Path
+
+# --- Cross-repo path fix ---
+# Insert the directory containing THIS file into sys.path so that
+# `from jira_config import ...` resolves correctly even when the caller's
+# cwd is a completely different repository.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+# --- end path fix ---
+
 import json
 import urllib.request
 import urllib.error
@@ -199,58 +215,100 @@ class JiraClient:
         )
         return response.get("issues", [])
     
+    def get_link_types(self) -> List[Dict]:
+        """
+        Get all available issue link types on this JIRA instance.
+        Returns list of link type objects with 'name' and optional 'inward'/'outward'.
+        """
+        response = self._make_request("GET", "/issueLinkType")
+        return response.get("issueLinkTypes", [])
+
     def link_issues(
         self,
         from_issue: str,
         to_issue: str,
-        link_type: str = "epic"
+        link_type: str = "relates to"
     ) -> Dict:
         """
-        Link two issues using custom fields or issue linking.
+        Link two issues using the appropriate API endpoint.
         
-        Note: This JIRA instance may not have issue linking enabled.
-        Supported link types (if configured):
-        - epic: Link to Epic (customfield_10100)
-        - parent: Link to Parent (customfield_10901)
-        - initiative: Link to Initiative (customfield_11022)
+        Routing strategy:
+        - If link_type is in ["epic", "parent", "initiative"]: use custom field PUT
+        - Otherwise: use standard /issueLink POST endpoint
         
-        If custom fields are not available on issue screens, use the JIRA UI
-        or configure the fields in JIRA project settings.
+        Standard relationship types (via /issueLink):
+          - "relates to"
+          - "blocks"
+          - "is blocked by"
+          - "clones"
+          - "is cloned by"
+          - "duplicates"
+          - "is duplicated by"
+          (full list via get_link_types())
+        
+        Hierarchical types (via custom field PUT):
+          - "epic": customfield_10100
+          - "parent": customfield_10901
+          - "initiative": customfield_11022
         """
-        # Map link types to custom field IDs
-        link_field_map = {
+        # Hierarchical (custom field) link types
+        hierarchical_fields = {
             "epic": "customfield_10100",
             "parent": "customfield_10901",
             "initiative": "customfield_11022"
         }
         
-        if link_type.lower() not in link_field_map:
-            available = ", ".join(link_field_map.keys())
-            raise Exception(
-                f"❌ Link type '{link_type}' not supported.\n"
-                f"Available: {available}"
-            )
+        link_type_lower = link_type.lower()
         
-        field_id = link_field_map[link_type.lower()]
-        
-        try:
-            # Update the target issue with the link field
-            return self._make_request(
-                "PUT",
-                f"/issue/{to_issue}",
-                {
-                    "fields": {
-                        field_id: {"key": from_issue}
+        # Route 1: Hierarchical link via custom field PUT
+        if link_type_lower in hierarchical_fields:
+            field_id = hierarchical_fields[link_type_lower]
+            try:
+                return self._make_request(
+                    "PUT",
+                    f"/issue/{to_issue}",
+                    {
+                        "fields": {
+                            field_id: {"key": from_issue}
+                        }
                     }
+                )
+            except Exception as e:
+                if "not on the appropriate screen" in str(e):
+                    raise Exception(
+                        f"❌ Link field '{link_type}' not available on issue screen.\n"
+                        f"Configure in JIRA Project Settings → Issue Types → Screens"
+                    )
+                raise
+        
+        # Route 2: Standard relationship link via /issueLink POST
+        else:
+            # Find the exact link type name (case-insensitive match)
+            available_types = self.get_link_types()
+            matched_type = None
+            for lt in available_types:
+                if lt.get("name", "").lower() == link_type_lower:
+                    matched_type = lt
+                    break
+            
+            if not matched_type:
+                available_names = [lt.get("name") for lt in available_types]
+                raise Exception(
+                    f"❌ Link type '{link_type}' not recognized.\n"
+                    f"Run 'jira link-types' to see valid names.\n"
+                    f"Available: {', '.join(available_names)}"
+                )
+            
+            # Use inwardIssue for source → target direction
+            return self._make_request(
+                "POST",
+                "/issueLink",
+                {
+                    "type": {"name": matched_type["name"]},
+                    "inwardIssue": {"key": to_issue},
+                    "outwardIssue": {"key": from_issue}
                 }
             )
-        except Exception as e:
-            if "not on the appropriate screen" in str(e):
-                raise Exception(
-                    f"❌ Link field '{link_type}' not available on issue screen.\n"
-                    f"Configure in JIRA Project Settings → Issue Types → Screens"
-                )
-            raise
 
 
 def cmd_check(args, config: JiraConfig) -> None:
@@ -318,6 +376,23 @@ def cmd_get(args, config: JiraConfig) -> None:
         print(f"Status: {fields.get('status', {}).get('name')}")
         print(f"Priority: {fields.get('priority', {}).get('name')}")
         print(f"Assignee: {fields.get('assignee', {}).get('displayName', 'Unassigned')}")
+        
+        # Show linked issues
+        issue_links = result.get("fields", {}).get("issuelinks", [])
+        if issue_links:
+            print("\nLinks:")
+            for link in issue_links:
+                link_type = link.get("type", {}).get("name", "Unknown")
+                if "inwardIssue" in link:
+                    linked_issue = link["inwardIssue"]
+                    link_direction = link.get("type", {}).get("inward", link_type)
+                else:
+                    linked_issue = link["outwardIssue"]
+                    link_direction = link.get("type", {}).get("outward", link_type)
+                
+                linked_key = linked_issue.get("key", "?")
+                linked_status = linked_issue.get("fields", {}).get("status", {}).get("name", "?")
+                print(f"  {link_direction} → {linked_key} ({linked_status})")
 
 
 def cmd_update(args, config: JiraConfig) -> None:
@@ -387,6 +462,27 @@ def cmd_link(args, config: JiraConfig) -> None:
     print(f"✅ Linked {args.from_issue} to {args.to_issue} ({args.type})")
 
 
+def cmd_link_types(args, config: JiraConfig) -> None:
+    """List available link types on this JIRA instance"""
+    client = JiraClient(config)
+    
+    link_types = client.get_link_types()
+    print(f"Available link types ({len(link_types)} total):")
+    for lt in link_types:
+        name = lt.get("name", "Unknown")
+        inward = lt.get("inward", "")
+        outward = lt.get("outward", "")
+        if inward and outward:
+            print(f"  {name}")
+            print(f"    → inward: {inward}")
+            print(f"    → outward: {outward}")
+        else:
+            print(f"  {name}")
+    
+    if args.json:
+        print(json.dumps(link_types, indent=2))
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -395,6 +491,7 @@ def main():
         epilog="""
 Examples:
   %(prog)s check
+  %(prog)s check --env-file /other/repo/.env
   %(prog)s create --type Bug --summary "Database pool exhaustion" --priority High
   %(prog)s create --template templates/bug.json --summary "New bug"
   %(prog)s get AQD-123
@@ -404,9 +501,39 @@ Examples:
   %(prog)s transition AQD-123 --to "In Progress"
   %(prog)s search --jql 'project = AQD AND status = "Open"'
   %(prog)s link AQD-123 AQD-456 --type "relates to"
+  %(prog)s link-types
+
+Cross-repo invocation (from a different repository):
+  python3 /path/to/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py \\
+    --env-file /path/to/other-repo/.env check
         """
     )
-    
+
+    # Global option: explicit .env file path (cross-repo support)
+    parser.add_argument(
+        "--env-file",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Explicit path to .env file containing JIRA_INSTANCE_URL, JIRA_PAT, "
+            "JIRA_PROJECT_KEY. When omitted, the script searches up from its own "
+            "directory then from cwd. Use this flag when invoking from a different repo."
+        )
+    )
+
+    # Global option: per-invocation project key override
+    parser.add_argument(
+        "--project",
+        metavar="KEY",
+        default=None,
+        help=(
+            "JIRA project key for this invocation (e.g. ADO, AQD, EHCD). "
+            "Overrides JIRA_PROJECT_KEY from any .env file. Use when calling "
+            "the skill from a repo that does not have its own .env, or to "
+            "target a specific project without editing .env."
+        )
+    )
+
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
     
     # check command
@@ -460,10 +587,14 @@ Examples:
     search_parser.add_argument("--json", action="store_true", help="Output JSON")
     
     # link command
-    link_parser = subparsers.add_parser("link", help="Link two issues via custom fields")
+    link_parser = subparsers.add_parser("link", help="Link two issues")
     link_parser.add_argument("from_issue", help="Source issue key")
     link_parser.add_argument("to_issue", help="Target issue key")
-    link_parser.add_argument("--type", default="epic", help="Link type: epic, parent, initiative (default: epic)")
+    link_parser.add_argument("--type", default="relates to", help="Link type (default: relates to). Run 'jira link-types' to see all available.")
+    
+    # link-types command
+    link_types_parser = subparsers.add_parser("link-types", help="List available issue link types")
+    link_types_parser.add_argument("--json", action="store_true", help="Output JSON")
     
     args = parser.parse_args()
     
@@ -472,7 +603,7 @@ Examples:
         sys.exit(1)
     
     try:
-        config = JiraConfig()
+        config = JiraConfig(env_file=args.env_file, project_key=args.project)
         
         # Dispatch to command handler
         handlers = {
@@ -484,7 +615,8 @@ Examples:
             "transitions": cmd_transitions,
             "transition": cmd_transition,
             "search": cmd_search,
-            "link": cmd_link
+            "link": cmd_link,
+            "link-types": cmd_link_types
         }
         
         handler = handlers.get(args.command)
