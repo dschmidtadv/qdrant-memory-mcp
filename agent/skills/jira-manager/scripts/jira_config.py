@@ -14,16 +14,19 @@ from typing import Dict, Optional, Tuple
 class JiraConfig:
     """Centralized JIRA configuration management"""
     
-    def __init__(self, env_file: Optional[str] = None):
+    def __init__(self, env_file: Optional[str] = None, project_key: Optional[str] = None):
         """
         Initialize JIRA configuration
         
         Args:
             env_file: Path to .env file (defaults to project root .env)
+            project_key: Optional override for JIRA project key (takes precedence over .env)
         """
         self.env_file = env_file or self._find_env_file()
         self.config = {}
         self._load_env()
+        if project_key:
+            self.config['JIRA_PROJECT_KEY'] = project_key
         self._validate()
     
     @staticmethod
