@@ -40,6 +40,7 @@ class JiraClient:
         """Initialize JIRA client"""
         self.config = config
         self.base_url = f"{config.instance_url}/rest/api/2"
+        self._custom_field_cache = {}  # Cache for custom field IDs
     
     def _make_request(
         self,
@@ -105,6 +106,43 @@ class JiraClient:
             print(f"Connection check failed: {e}")
             return False
     
+    def get_custom_field_id(self, field_name: str) -> Optional[str]:
+        """
+        Discover field ID by name (cached).
+        
+        Searches all JIRA fields:
+        - "Story Points" -> customfield_10106 (or instance-specific ID)
+        - "Original Estimate" -> timeoriginalestimate (built-in field)
+        
+        Args:
+            field_name: Human-readable field name (e.g., "Story Points")
+        
+        Returns:
+            Field ID (e.g., "customfield_10106") or None if not found
+        """
+        # Check cache first
+        if field_name in self._custom_field_cache:
+            return self._custom_field_cache[field_name]
+        
+        try:
+            # Query /field endpoint to get all fields
+            response = self._make_request("GET", "/field")
+            
+            # Search for matching field by name (case-insensitive)
+            for field in response:
+                if field.get("name", "").lower() == field_name.lower():
+                    field_id = field.get("id")
+                    if field_id:
+                        self._custom_field_cache[field_name] = field_id
+                        return field_id
+        
+        except Exception as e:
+            # If discovery fails, return None (field will be skipped)
+            return None
+        
+        # Not found
+        return None
+    
     def create_issue(
         self,
         issue_type: str,
@@ -113,6 +151,8 @@ class JiraClient:
         priority: Optional[str] = None,
         assignee: Optional[str] = None,
         labels: Optional[List[str]] = None,
+        story_points: Optional[int] = None,
+        original_estimate: Optional[int] = None,
         custom_fields: Optional[Dict] = None
     ) -> Dict:
         """Create a new JIRA issue"""
@@ -130,6 +170,19 @@ class JiraClient:
             fields["assignee"] = {"emailAddress": assignee}
         if labels:
             fields["labels"] = labels
+        
+        # Handle Story Points (auto-discover field ID)
+        if story_points is not None:
+            sp_field_id = self.get_custom_field_id("Story Points")
+            if sp_field_id:
+                fields[sp_field_id] = story_points
+        
+        # Handle Original Estimate (auto-discover field ID)
+        if original_estimate is not None:
+            oe_field_id = self.get_custom_field_id("Original Estimate")
+            if oe_field_id:
+                fields[oe_field_id] = original_estimate
+        
         if custom_fields:
             fields.update(custom_fields)
         
@@ -147,6 +200,8 @@ class JiraClient:
         priority: Optional[str] = None,
         assignee: Optional[str] = None,
         labels: Optional[List[str]] = None,
+        story_points: Optional[int] = None,
+        original_estimate: Optional[int] = None,
         custom_fields: Optional[Dict] = None
     ) -> Dict:
         """Update an existing JIRA issue"""
@@ -162,6 +217,19 @@ class JiraClient:
             fields["assignee"] = {"emailAddress": assignee}
         if labels:
             fields["labels"] = labels
+        
+        # Handle Story Points (auto-discover field ID)
+        if story_points is not None:
+            sp_field_id = self.get_custom_field_id("Story Points")
+            if sp_field_id:
+                fields[sp_field_id] = story_points
+        
+        # Handle Original Estimate (auto-discover field ID)
+        if original_estimate is not None:
+            oe_field_id = self.get_custom_field_id("Original Estimate")
+            if oe_field_id:
+                fields[oe_field_id] = original_estimate
+        
         if custom_fields:
             fields.update(custom_fields)
         
@@ -456,6 +524,8 @@ def cmd_create(args, config: JiraConfig) -> None:
         priority=fields.pop("priority", None),
         assignee=fields.pop("assignee", None),
         labels=fields.pop("labels", None),
+        story_points=args.story_points,
+        original_estimate=args.original_estimate,
         custom_fields=fields
     )
     
@@ -518,7 +588,9 @@ def cmd_update(args, config: JiraConfig) -> None:
         description=args.description,
         priority=args.priority,
         assignee=args.assignee,
-        labels=args.labels.split(",") if args.labels else None
+        labels=args.labels.split(",") if args.labels else None,
+        story_points=args.story_points,
+        original_estimate=args.original_estimate
     )
     
     print(f"✅ Updated ticket: {args.issue_key}")
@@ -691,6 +763,8 @@ Cross-repo invocation (from a different repository):
     create_parser.add_argument("--priority", help="Priority (High, Medium, Low)")
     create_parser.add_argument("--assignee", help="Assignee email")
     create_parser.add_argument("--labels", help="Comma-separated labels")
+    create_parser.add_argument("--story-points", type=int, help="Story Points (auto-discovers field ID)")
+    create_parser.add_argument("--original-estimate", type=int, help="Original Estimate in seconds (auto-discovers field ID)")
     create_parser.add_argument("--json", action="store_true", help="Output JSON")
     
     # get command
@@ -706,6 +780,8 @@ Cross-repo invocation (from a different repository):
     update_parser.add_argument("--priority", help="New priority")
     update_parser.add_argument("--assignee", help="New assignee email")
     update_parser.add_argument("--labels", help="Comma-separated labels")
+    update_parser.add_argument("--story-points", type=int, help="Story Points (auto-discovers field ID)")
+    update_parser.add_argument("--original-estimate", type=int, help="Original Estimate in seconds (auto-discovers field ID)")
     
     # comment command
     comment_parser = subparsers.add_parser("comment", help="Add comment to issue")

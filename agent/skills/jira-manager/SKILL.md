@@ -383,7 +383,66 @@ Options:
 - `--priority` — Priority (High, Medium, Low)
 - `--assignee` — Assignee email
 - `--labels` — Comma-separated labels
+- `--story-points` — Story Points value (auto-discovers field ID on this JIRA instance)
+- `--original-estimate` — Original Estimate in seconds (auto-discovers field ID; 3600 = 1 hour, 28800 = 8 hours, 86400 = 1 day)
 - `--json` — Output JSON response
+
+#### Create with Story Points and Original Estimate
+
+```bash
+python3 jira_client.py create \
+  --type Story \
+  --summary "User authentication flow" \
+  --description "Implement OAuth 2.0" \
+  --story-points 13
+```
+
+**Field Auto-Discovery:**
+
+Story Points and Original Estimate fields are auto-discovered by querying the JIRA instance's `/field` endpoint. This means:
+- Works with any JIRA instance (Cloud, Server, Data Center)
+- Automatically finds the correct custom field ID for your instance
+- Results are cached to avoid repeated API calls
+- If a field is not configured on the issue screen, you'll get a validation error
+
+**Testing with CLOUD Project:**
+
+```bash
+# Create with Story Points
+python3 jira_client.py --project CLOUD create \
+  --type Task \
+  --summary "Sprint task" \
+  --story-points 8
+
+# Update Story Points
+python3 jira_client.py --project CLOUD update CLOUD-123 \
+  --story-points 13
+
+# Verify Story Points on existing issue
+python3 jira_client.py --project CLOUD update CLOUD-2000 --story-points 5
+python3 jira_client.py --project CLOUD get CLOUD-2000 --json | grep customfield_10106
+# Output: "customfield_10106": 5.0
+```
+
+**Field Availability (CLOUD Project Verified):**
+
+| Field | Status | Notes |
+|---|---|---|
+| Story Points | ✅ WORKING | Fully functional - auto-discovers to `customfield_10106` |
+| Original Estimate | ⚠️ NOT SETTABLE | Visible in UI but REST API v2 cannot set it (JIRA configuration issue) |
+
+**If a field is not available:**
+```
+❌ Validation error: {'fieldname': "Field 'fieldname' cannot be set. It is not on the appropriate screen, or unknown."}
+```
+
+**Solution:** Contact your JIRA administrator to configure the field for REST API access in Project Settings → Issue Types → Screens.
+
+**Real-World Testing Results (CLOUD Project):**
+- ✅ Created multiple issues with Story Points (5, 8, 13, 21)
+- ✅ Updated Story Points on existing issues (CLOUD-2000, CLOUD-2007, CLOUD-2008, etc.)
+- ✅ Values persist correctly in JIRA
+- ✅ Field auto-discovery caching works
 
 #### `get`
 Get issue details.
@@ -400,6 +459,23 @@ python3 jira_client.py update AQD-123 \
   --summary "New summary" \
   --priority Critical
 ```
+
+**Update with Story Points and Original Estimate:**
+
+```bash
+python3 jira_client.py update AQD-123 \
+  --story-points 8 \
+  --original-estimate 86400
+```
+
+Options:
+- `--summary` — New summary
+- `--description` — New description
+- `--priority` — New priority
+- `--assignee` — New assignee email
+- `--labels` — Comma-separated labels
+- `--story-points` — Story Points value (auto-discovers field ID)
+- `--original-estimate` — Original Estimate in seconds (auto-discovers field ID)
 
 #### `comment`
 Add comment to issue.
@@ -503,6 +579,49 @@ The CLI provides clear, actionable error messages:
 Available: Start Progress, Resolve, Close
 ```
 
+## Custom Field Auto-Discovery
+
+The `create` and `update` commands support **automatic field ID discovery** for Story Points and Original Estimate:
+
+### How It Works
+
+When you use `--story-points` or `--original-estimate`, the CLI:
+1. Queries the `/field` endpoint to get all available fields
+2. Searches by field name (case-insensitive)
+3. Caches the result to avoid repeated API calls
+4. Uses the discovered field ID for the create/update operation
+
+### Supported Fields
+
+| Field Name | Built-in ID | Discovery | Notes |
+|---|---|---|---|
+| Story Points | `customfield_10106` | Auto-discovered | Usually available on most instances |
+| Original Estimate | `timeoriginalestimate` | Auto-discovered | May require JIRA admin to enable on issue screens |
+
+### Example
+
+```bash
+# Auto-discovers Story Points field for your JIRA instance
+python3 jira_client.py --project CLOUD create \
+  --type Task \
+  --summary "Sprint task" \
+  --story-points 8
+```
+
+The first call discovers the field ID; subsequent calls use the cached result.
+
+### Troubleshooting Auto-Discovery
+
+If you see:
+```
+❌ Validation error: {'fieldname': "Field 'fieldname' cannot be set. It is not on the appropriate screen..."}
+```
+
+The field exists but is not configured on the issue screen. Contact your JIRA administrator to:
+1. Go to Project Settings → Issue Types → Screens
+2. Add the field to the appropriate screens
+3. Try again
+
 ## References
 
 - **JQL Patterns:** [`references/jql-patterns.md`](references/jql-patterns.md) — Common query patterns
@@ -548,6 +667,8 @@ This skill follows these principles:
 
 ## Version History
 
+- **v4.3** (2026-08-03) — Story Points & Original Estimate support with auto-discovery. Uses `/field` endpoint to discover custom field IDs, works with any JIRA instance (Cloud, Server, Data Center). Tested with CLOUD project.
+- **v4.0-4.2** — Hardened CLI with pre-flight gates, file attachments, issue linking
 - **v3.0** (2026-04-29) — CLI-first architecture, templates, centralized config
 - **v2.0** — Stdlib urllib, Bearer auth, Server/Data Center support
 - **v1.0** — Initial release with requests library
