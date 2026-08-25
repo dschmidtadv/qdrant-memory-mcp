@@ -83,6 +83,36 @@ aws ssm describe-instance-information --instance-information-filter-list "key=In
   --region <REGION> --profile <PROFILE_NAME>
 ```
 
+### Step 4: Fallback - Bastion Host Connection (if SSM not available)
+
+If direct SSM connection is not possible (SSM agent not running, IAM permissions missing, or network restrictions), use a bastion host as an alternative:
+
+```bash
+# Connect to bastion host
+ssh <USERNAME>@<BASTION_HOSTNAME>
+
+# Example:
+ssh dietrich.gottfriedsc@ahrq.local@ahrq-jenkins-03.ahrq.local
+```
+
+Once connected to the bastion, elevate to the deployment user:
+
+```bash
+sudo su - <DEPLOY_USER>@<DOMAIN>
+
+# Example:
+sudo su - ahrqgovjenkins.deploy@ahrq.local
+```
+
+**Common Bastion Configurations:**
+
+| Environment | Bastion Host | Username | Deployment User |
+|-------------|--------------|----------|-----------------|
+| AHRQ | `ahrq-jenkins-03.ahrq.local` | `dietrich.gottfriedsc@ahrq.local` | `ahrqgovjenkins.deploy@ahrq.local` |
+
+From the deployment user account, you can execute commands on target machines using SSH, SCP, or other connection methods as available in that environment.
+
+
 ## Usage Patterns
 
 ### Pattern 1: Run a Simple Command
