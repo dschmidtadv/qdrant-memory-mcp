@@ -46,24 +46,24 @@ Host tableau-prod
 
 Domain credential keychain entry (for initial setup / root sudo only): `ahrq/domain-user` (username: `dietrich.gottfriedsc@ahrq.local`)
 
-**TSM admin UI — SSH tunnel (port 8850):**
+**TSM admin UI (port 8850) — direct Tailscale access:**
 ```bash
-# Open tunnel (background)
-ssh -f -N -L 18850:localhost:8850 tableau-prod
+# Open in browser (Tailscale required)
+open "https://ds-p-01.ahrq.local:8850"
 
-# Open in browser
-open https://localhost:18850
-# Accept self-signed cert warning, then login:
-# username: tableau  password: (keychain: tableau/tsm-admin)
+# Login:
+# username: tableau
+# password: $(security find-generic-password -s "tableau/tsm-admin" -a "tableau" -w)
 ```
 
 | Method | Status | Notes |
 |--------|--------|-------|
 | `ssh tableau-prod` (key auth) | ✅ **Working** | Requires Tailscale connected |
 | `sudo su - tableau` (NOPASSWD) | ✅ **Working** | No password prompt |
-| SSH tunnel → TSM admin UI `:18850` | ✅ **Working** | `ssh -f -N -L 18850:localhost:8850 tableau-prod` |
-| DataViz portal REST API | ✅ **Working** | `POST /api/2.8/auth/signin` with XML |
+| TSM admin UI (direct) | ✅ **Working** | `https://ds-p-01.ahrq.local:8850` (Tailscale required, accept self-signed cert) |
+| DataViz portal REST API | ✅ **Working** | `POST /api/2.8/auth/signin` with XML; auth confirmed |
 | Direct SSH as `tableau` user | ❌ | `tableau-prod-02` hostname resets before handshake |
+| SSH tunnel to port 8850 | ❌ | Server rejects tunneled connections (TLS/host validation) |
 | AWS SSM `start-session` / `send-command` | ❌ | `ssm:StartSession` / `ssm:SendCommand` not granted to `ct-datasearch-dev-role` |
 | Bastion (`ahrq-jenkins-03.ahrq.local`) → Tableau | ❌ | Bastion has no route to AWS VPC `10.57.x.x` |
 
