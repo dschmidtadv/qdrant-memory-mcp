@@ -4,12 +4,12 @@
 
 | Item | Value |
 |------|-------|
-| SSH hostname | `ds-p-01.ahrq.local` (Tailscale `100.64.1.11`) |
+| SSH alias | `ssh tableau-prod` (→ `ds-p-01.ahrq.local`, Tailscale `100.64.1.11`) |
 | EC2 Instance ID | `i-0453ee063da91e8c9` ("Tableau 2024 Rebuild") |
 | EC2 Private IP | `10.57.0.246` |
 | Current TSM version | `20262.26.0708.1337` |
-| TSM admin UI | `https://ds-p-01.ahrq.local:8850/#/status` |
-| DataViz portal | `https://dataviz.example.com` |
+| TSM admin UI | `https://localhost:18850/#/status` (via SSH tunnel — see below) |
+| DataViz portal | `https://dataviz.example.com` (REST API auth confirmed ✅) |
 | Tableau releases page | https://www.tableau.com/support/releases/server |
 | S3 backup bucket | `s3://example-dataviz-bucket/backup/` |
 | AWS Account ID | `097056470251` |
@@ -46,9 +46,23 @@ Host tableau-prod
 
 Domain credential keychain entry (for initial setup / root sudo only): `ahrq/domain-user` (username: `dietrich.gottfriedsc@ahrq.local`)
 
+**TSM admin UI — SSH tunnel (port 8850):**
+```bash
+# Open tunnel (background)
+ssh -f -N -L 18850:localhost:8850 tableau-prod
+
+# Open in browser
+open https://localhost:18850
+# Accept self-signed cert warning, then login:
+# username: tableau  password: (keychain: tableau/tsm-admin)
+```
+
 | Method | Status | Notes |
 |--------|--------|-------|
-| SSH → `ds-p-01.ahrq.local` as domain user, then `sudo su - tableau` | ✅ **Working** | Requires Tailscale connected |
+| `ssh tableau-prod` (key auth) | ✅ **Working** | Requires Tailscale connected |
+| `sudo su - tableau` (NOPASSWD) | ✅ **Working** | No password prompt |
+| SSH tunnel → TSM admin UI `:18850` | ✅ **Working** | `ssh -f -N -L 18850:localhost:8850 tableau-prod` |
+| DataViz portal REST API | ✅ **Working** | `POST /api/2.8/auth/signin` with XML |
 | Direct SSH as `tableau` user | ❌ | `tableau-prod-02` hostname resets before handshake |
 | AWS SSM `start-session` / `send-command` | ❌ | `ssm:StartSession` / `ssm:SendCommand` not granted to `ct-datasearch-dev-role` |
 | Bastion (`ahrq-jenkins-03.ahrq.local`) → Tableau | ❌ | Bastion has no route to AWS VPC `10.57.x.x` |
