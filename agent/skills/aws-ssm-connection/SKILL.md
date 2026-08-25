@@ -104,13 +104,39 @@ sudo su - <DEPLOY_USER>@<DOMAIN>
 sudo su - ahrqgovjenkins.deploy@ahrq.local
 ```
 
+**Using SSM Session Manager from the Bastion Host:**
+
+Once connected and elevated to the deployment user, you can use AWS Systems Manager Session Manager to connect to instances in environments that require bastion-mediated access. The bastion host does NOT use AWS CLI config profiles; instead, use environment variables for authentication:
+
+```bash
+# From bastion (as deployment user), use environment variables for AWS credentials
+AWS_ACCESS_KEY_ID=<KEY> AWS_SECRET_ACCESS_KEY=<SECRET> AWS_SESSION_TOKEN=<TOKEN> \
+  aws ssm start-session --target <INSTANCE_ID> \
+  --document-name AWS-StartInteractiveCommand \
+  --parameters "command=['<YOUR_COMMAND>']" \
+  --region <REGION>
+
+# Example:
+AWS_ACCESS_KEY_ID=AKIA... AWS_SECRET_ACCESS_KEY=... \
+  aws ssm start-session --target i-0be8692a6043b7e8e \
+  --document-name AWS-StartInteractiveCommand \
+  --parameters "command=['whoami']" \
+  --region us-east-1
+```
+
 **Common Bastion Configurations:**
 
-| Environment | Bastion Host | Username | Deployment User |
-|-------------|--------------|----------|-----------------|
-| AHRQ | `ahrq-jenkins-03.ahrq.local` | `dietrich.gottfriedsc@ahrq.local` | `ahrqgovjenkins.deploy@ahrq.local` |
+| Environment | Bastion Host | Username | Deployment User | Authentication |
+|-------------|--------------|----------|-----------------|-----------------|
+| AHRQ | `ahrq-jenkins-03.ahrq.local` | `dietrich.gottfriedsc@ahrq.local` | `ahrqgovjenkins.deploy@ahrq.local` | Environment variables (no profiles) |
 
-From the deployment user account, you can execute commands on target machines using SSH, SCP, or other connection methods as available in that environment.
+**Bastion Host SSM Workflow:**
+1. SSH to bastion: `ssh dietrich.gottfriedsc@ahrq.local@ahrq-jenkins-03.ahrq.local`
+2. Elevate to deployment user: `sudo su - ahrqgovjenkins.deploy@ahrq.local`
+3. Set AWS credentials as environment variables (obtained from Kion or credential vault)
+4. Use `aws ssm start-session` with `--region` to reach instances
+5. Execute commands via SSM just as you would locally
+
 
 
 ## Usage Patterns
