@@ -8,7 +8,7 @@
 | EC2 Instance ID | `i-0453ee063da91e8c9` ("Tableau 2024 Rebuild") |
 | EC2 Private IP | `10.57.0.246` |
 | Current TSM version | `20262.26.0708.1337` |
-| TSM admin UI | `https://localhost:18850/#/status` (via SSH tunnel — see below) |
+| TSM admin UI | `https://ds-p-01.ahrq.local:8850` (Tailscale required — see below) |
 | DataViz portal | `https://dataviz.example.com` (REST API auth confirmed ✅) |
 | Tableau releases page | https://www.tableau.com/support/releases/server |
 | S3 backup bucket | `s3://example-dataviz-bucket/backup/` |
@@ -105,7 +105,11 @@ security find-generic-password -s "tableau/dataviz-portal" -a "tableau" -w
 ### 1. SSH Access
 
 ```bash
-ssh <username>@tableau-prod-02
+# Passwordless SSH (Tailscale required)
+ssh tableau-prod
+
+# Switch to tableau OS user
+sudo su - tableau
 ```
 
 ### 2. OS Updates
