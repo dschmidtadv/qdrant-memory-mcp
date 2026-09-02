@@ -8,6 +8,8 @@ agent/.env.local
 # IDE & Editor
 .claude/settings.local.json
 agent/skills/puppeteer-automation/scripts/.env
+agent/skills/**/.env
+agent/skills/**/scripts/.env
 
 # Build & Runtime
 **/dist/

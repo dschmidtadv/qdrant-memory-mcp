@@ -1,3 +1,8 @@
+---
+name: aws-iam-analysis
+description: IAM security review, access analysis, and compliance assessment for AWS accounts.
+---
+
 # AWS IAM Analysis Skill
 
 **Status:** ACTIVE  
