@@ -88,12 +88,18 @@ def flatten_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
                         return result
                     elif def_name in _seen_refs:
                         debug_log(f"Circular reference detected: {ref}")
-                        return node  # Return unresolved to prevent infinite loop
+                        # Rewrite to definitions path for AJV v8 (Draft-07) compatibility
+                        return {"$ref": f"#/definitions/{def_name}"}
+                    else:
+                        # Not found in global_defs — rewrite to definitions path for AJV v8 compatibility
+                        debug_log(f"Unresolved reference: {ref} — rewriting to #/definitions/{def_name}")
+                        return {"$ref": f"#/definitions/{def_name}"}
             
-            # Recursively process all values, including $defs
+            # Recursively process all values, including $defs (rename to definitions for AJV v8 compatibility)
             result = {}
             for key, value in node.items():
-                result[key] = resolve_refs(value, _seen_refs)
+                new_key = "definitions" if key == "$defs" else key
+                result[new_key] = resolve_refs(value, _seen_refs)
             return result
         elif isinstance(node, list):
             return [resolve_refs(item, _seen_refs) for item in node]

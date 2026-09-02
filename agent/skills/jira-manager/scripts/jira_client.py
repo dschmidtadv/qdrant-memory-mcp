@@ -27,9 +27,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import argparse
-import mimetypes
-import os
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from jira_config import JiraConfig, load_template
 
 
@@ -40,7 +38,6 @@ class JiraClient:
         """Initialize JIRA client"""
         self.config = config
         self.base_url = f"{config.instance_url}/rest/api/2"
-        self._custom_field_cache = {}  # Cache for custom field IDs
     
     def _make_request(
         self,
@@ -106,43 +103,6 @@ class JiraClient:
             print(f"Connection check failed: {e}")
             return False
     
-    def get_custom_field_id(self, field_name: str) -> Optional[str]:
-        """
-        Discover field ID by name (cached).
-        
-        Searches all JIRA fields:
-        - "Story Points" -> customfield_10106 (or instance-specific ID)
-        - "Original Estimate" -> timeoriginalestimate (built-in field)
-        
-        Args:
-            field_name: Human-readable field name (e.g., "Story Points")
-        
-        Returns:
-            Field ID (e.g., "customfield_10106") or None if not found
-        """
-        # Check cache first
-        if field_name in self._custom_field_cache:
-            return self._custom_field_cache[field_name]
-        
-        try:
-            # Query /field endpoint to get all fields
-            response = self._make_request("GET", "/field")
-            
-            # Search for matching field by name (case-insensitive)
-            for field in response:
-                if field.get("name", "").lower() == field_name.lower():
-                    field_id = field.get("id")
-                    if field_id:
-                        self._custom_field_cache[field_name] = field_id
-                        return field_id
-        
-        except Exception as e:
-            # If discovery fails, return None (field will be skipped)
-            return None
-        
-        # Not found
-        return None
-    
     def create_issue(
         self,
         issue_type: str,
@@ -151,8 +111,6 @@ class JiraClient:
         priority: Optional[str] = None,
         assignee: Optional[str] = None,
         labels: Optional[List[str]] = None,
-        story_points: Optional[int] = None,
-        original_estimate: Optional[int] = None,
         custom_fields: Optional[Dict] = None
     ) -> Dict:
         """Create a new JIRA issue"""
@@ -170,19 +128,6 @@ class JiraClient:
             fields["assignee"] = {"emailAddress": assignee}
         if labels:
             fields["labels"] = labels
-        
-        # Handle Story Points (auto-discover field ID)
-        if story_points is not None:
-            sp_field_id = self.get_custom_field_id("Story Points")
-            if sp_field_id:
-                fields[sp_field_id] = story_points
-        
-        # Handle Original Estimate (auto-discover field ID)
-        if original_estimate is not None:
-            oe_field_id = self.get_custom_field_id("Original Estimate")
-            if oe_field_id:
-                fields[oe_field_id] = original_estimate
-        
         if custom_fields:
             fields.update(custom_fields)
         
@@ -200,8 +145,6 @@ class JiraClient:
         priority: Optional[str] = None,
         assignee: Optional[str] = None,
         labels: Optional[List[str]] = None,
-        story_points: Optional[int] = None,
-        original_estimate: Optional[int] = None,
         custom_fields: Optional[Dict] = None
     ) -> Dict:
         """Update an existing JIRA issue"""
@@ -217,19 +160,6 @@ class JiraClient:
             fields["assignee"] = {"emailAddress": assignee}
         if labels:
             fields["labels"] = labels
-        
-        # Handle Story Points (auto-discover field ID)
-        if story_points is not None:
-            sp_field_id = self.get_custom_field_id("Story Points")
-            if sp_field_id:
-                fields[sp_field_id] = story_points
-        
-        # Handle Original Estimate (auto-discover field ID)
-        if original_estimate is not None:
-            oe_field_id = self.get_custom_field_id("Original Estimate")
-            if oe_field_id:
-                fields[oe_field_id] = original_estimate
-        
         if custom_fields:
             fields.update(custom_fields)
         
@@ -379,106 +309,6 @@ class JiraClient:
                     "outwardIssue": {"key": from_issue}
                 }
             )
-    
-    def _encode_multipart_form_data(self, file_path: str) -> Tuple[bytes, str]:
-        """
-        Encode file as multipart/form-data for upload.
-        
-        Args:
-            file_path: Path to file to upload
-        
-        Returns:
-            Tuple of (body_bytes, content_type_header)
-        
-        Raises:
-            FileNotFoundError if file doesn't exist
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        
-        # Generate boundary using random hex
-        boundary = os.urandom(16).hex()
-        
-        # Read file in binary mode
-        with open(file_path, 'rb') as f:
-            file_data = f.read()
-        
-        # Detect MIME type
-        mime_type, _ = mimetypes.guess_type(file_path)
-        mime_type = mime_type or 'application/octet-stream'
-        
-        # Build multipart body
-        filename = os.path.basename(file_path)
-        body = (
-            f'--{boundary}\r\n'
-            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-            f'Content-Type: {mime_type}\r\n\r\n'
-        ).encode('utf-8') + file_data + f'\r\n--{boundary}--\r\n'.encode('utf-8')
-        
-        content_type = f'multipart/form-data; boundary={boundary}'
-        return body, content_type
-    
-    def attach_file(self, issue_key: str, file_path: str) -> Dict:
-        """
-        Attach file to JIRA issue.
-        
-        Args:
-            issue_key: Issue key (e.g., "CLOUD-123")
-            file_path: Path to file to attach (absolute or relative)
-        
-        Returns:
-            Attachment metadata: {id, filename, author, created, size, mimeType}
-        
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            Exception: For API errors (403, 404, 413, etc.)
-        """
-        # Validate file exists
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"❌ File not found: {file_path}")
-        
-        # Encode file as multipart
-        body, content_type = self._encode_multipart_form_data(file_path)
-        
-        # Build request with special headers for file upload
-        url = f"{self.base_url}/issue/{issue_key}/attachments"
-        headers = self.config.get_headers()
-        headers['X-Atlassian-Token'] = 'nocheck'  # CSRF bypass for file uploads
-        headers['Content-Type'] = content_type
-        
-        try:
-            req = urllib.request.Request(url, data=body, headers=headers, method='POST')
-            with urllib.request.urlopen(req, context=self.config.ssl_context) as response:
-                response_data = response.read().decode('utf-8')
-                result = json.loads(response_data)
-                
-                # Handle both single attachment and array response
-                if isinstance(result, list) and len(result) > 0:
-                    return result[0]
-                elif isinstance(result, dict):
-                    return result
-                else:
-                    raise Exception(f"❌ Unexpected response: {result}")
-        
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            if e.code == 403:
-                raise Exception(f"❌ Not authorized to attach to {issue_key}. Check permissions.")
-            elif e.code == 404:
-                raise Exception(f"❌ Issue '{issue_key}' not found.")
-            elif e.code == 413:
-                raise Exception(f"❌ File too large. Check instance attachment size limit.")
-            else:
-                try:
-                    error_data = json.loads(error_body)
-                    if 'errorMessages' in error_data:
-                        raise Exception(f"❌ Error: {error_data['errorMessages']}")
-                except json.JSONDecodeError:
-                    pass
-                raise Exception(f"❌ HTTP {e.code}: {error_body}")
-        
-        except urllib.error.URLError as e:
-            raise Exception(f"❌ Connection error: {e.reason}")
 
 
 def cmd_check(args, config: JiraConfig) -> None:
@@ -524,8 +354,6 @@ def cmd_create(args, config: JiraConfig) -> None:
         priority=fields.pop("priority", None),
         assignee=fields.pop("assignee", None),
         labels=fields.pop("labels", None),
-        story_points=args.story_points,
-        original_estimate=args.original_estimate,
         custom_fields=fields
     )
     
@@ -546,8 +374,11 @@ def cmd_get(args, config: JiraConfig) -> None:
         print(f"Key: {result['key']}")
         print(f"Summary: {fields.get('summary')}")
         print(f"Status: {fields.get('status', {}).get('name')}")
-        print(f"Priority: {fields.get('priority', {}).get('name')}")
-        print(f"Assignee: {fields.get('assignee', {}).get('displayName', 'Unassigned')}")
+        print(f"Priority: {(fields.get('priority') or {}).get('name', 'None')}")
+        print(f"Assignee: {(fields.get('assignee') or {}).get('displayName', 'Unassigned')}")
+        story_points = fields.get('customfield_10106') or fields.get('story_points')
+        if story_points is not None:
+            print(f"Story Points: {story_points}")
         
         # Show linked issues
         issue_links = result.get("fields", {}).get("issuelinks", [])
@@ -565,23 +396,16 @@ def cmd_get(args, config: JiraConfig) -> None:
                 linked_key = linked_issue.get("key", "?")
                 linked_status = linked_issue.get("fields", {}).get("status", {}).get("name", "?")
                 print(f"  {link_direction} → {linked_key} ({linked_status})")
-        
-        # Show attachments
-        attachments = result.get("fields", {}).get("attachment", [])
-        if attachments:
-            print("\nAttachments:")
-            for attachment in attachments:
-                filename = attachment.get("filename", "unknown")
-                size = attachment.get("size", 0)
-                author = attachment.get("author", {}).get("displayName", "Unknown")
-                created = attachment.get("created", "?")[:10]  # Just date part
-                print(f"  - {filename} ({size} bytes) by {author} [{created}]")
 
 
 def cmd_update(args, config: JiraConfig) -> None:
     """Update an issue"""
     client = JiraClient(config)
-    
+
+    custom_fields = {}
+    if getattr(args, 'story_points', None) is not None:
+        custom_fields['customfield_10106'] = args.story_points
+
     client.update_issue(
         args.issue_key,
         summary=args.summary,
@@ -589,10 +413,9 @@ def cmd_update(args, config: JiraConfig) -> None:
         priority=args.priority,
         assignee=args.assignee,
         labels=args.labels.split(",") if args.labels else None,
-        story_points=args.story_points,
-        original_estimate=args.original_estimate
+        custom_fields=custom_fields if custom_fields else None
     )
-    
+
     print(f"✅ Updated ticket: {args.issue_key}")
 
 
@@ -668,36 +491,6 @@ def cmd_link_types(args, config: JiraConfig) -> None:
         print(json.dumps(link_types, indent=2))
 
 
-def cmd_attach(args, config: JiraConfig) -> None:
-    """Attach file to issue"""
-    client = JiraClient(config)
-    
-    try:
-        result = client.attach_file(args.issue_key, args.file_path)
-        
-        # Extract useful metadata
-        filename = result.get('filename', 'unknown')
-        size = result.get('size', 0)
-        author = result.get('author', {}).get('displayName', 'Unknown')
-        
-        print(f"✅ Attached to {args.issue_key}: {filename} ({size} bytes by {author})")
-        
-        # Optional: add comment after attachment
-        if args.comment:
-            client.add_comment(args.issue_key, args.comment)
-            print(f"✅ Added comment to {args.issue_key}")
-        
-        if args.json:
-            print(json.dumps(result, indent=2))
-    
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-
-
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -716,7 +509,6 @@ Examples:
   %(prog)s transition AQD-123 --to "In Progress"
   %(prog)s search --jql 'project = AQD AND status = "Open"'
   %(prog)s link AQD-123 AQD-456 --type "relates to"
-  %(prog)s link-types
 
 Cross-repo invocation (from a different repository):
   python3 /path/to/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py \\
@@ -763,8 +555,6 @@ Cross-repo invocation (from a different repository):
     create_parser.add_argument("--priority", help="Priority (High, Medium, Low)")
     create_parser.add_argument("--assignee", help="Assignee email")
     create_parser.add_argument("--labels", help="Comma-separated labels")
-    create_parser.add_argument("--story-points", type=int, help="Story Points (auto-discovers field ID)")
-    create_parser.add_argument("--original-estimate", type=int, help="Original Estimate in seconds (auto-discovers field ID)")
     create_parser.add_argument("--json", action="store_true", help="Output JSON")
     
     # get command
@@ -780,8 +570,7 @@ Cross-repo invocation (from a different repository):
     update_parser.add_argument("--priority", help="New priority")
     update_parser.add_argument("--assignee", help="New assignee email")
     update_parser.add_argument("--labels", help="Comma-separated labels")
-    update_parser.add_argument("--story-points", type=int, help="Story Points (auto-discovers field ID)")
-    update_parser.add_argument("--original-estimate", type=int, help="Original Estimate in seconds (auto-discovers field ID)")
+    update_parser.add_argument("--story-points", type=float, dest="story_points", help="Story points (customfield_10016)")
     
     # comment command
     comment_parser = subparsers.add_parser("comment", help="Add comment to issue")
@@ -815,14 +604,6 @@ Cross-repo invocation (from a different repository):
     link_types_parser = subparsers.add_parser("link-types", help="List available issue link types")
     link_types_parser.add_argument("--json", action="store_true", help="Output JSON")
     
-    # attach command
-    attach_parser = subparsers.add_parser("attach", help="Attach file to issue")
-    attach_parser.add_argument("issue_key", help="Issue key (e.g., CLOUD-123)")
-    attach_parser.add_argument("file_path", help="Path to file to attach (absolute or relative)")
-    attach_parser.add_argument("--comment", help="Optional comment to add after attachment")
-    attach_parser.add_argument("--description", help="Optional description (for logging only)")
-    attach_parser.add_argument("--json", action="store_true", help="Output JSON")
-    
     args = parser.parse_args()
     
     if not args.command:
@@ -843,8 +624,7 @@ Cross-repo invocation (from a different repository):
             "transition": cmd_transition,
             "search": cmd_search,
             "link": cmd_link,
-            "link-types": cmd_link_types,
-            "attach": cmd_attach
+            "link-types": cmd_link_types
         }
         
         handler = handlers.get(args.command)

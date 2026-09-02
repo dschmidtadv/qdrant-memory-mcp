@@ -2,6 +2,31 @@
 """
 JIRA Configuration Manager
 Handles .env loading, config validation, and SSL context setup
+
+Split credential model
+----------------------
+JIRA credentials are split across two sources because they have different
+ownership scopes:
+
+  SHARED (skill's host repo .env):
+    JIRA_INSTANCE_URL  — same for all projects on the same Jira instance
+    JIRA_PAT           — personal token, same across all projects
+
+  PER-PROJECT (caller's repo .env or --project CLI flag):
+    JIRA_PROJECT_KEY   — different for every project (ADO, AQD, EHCD, ...)
+
+Resolution order (later sources override earlier ones):
+  1. Walk UP from the script file's own directory  → shared creds
+  2. Walk UP from cwd                              → project-specific overrides
+  3. $HOME/.env                                    → global fallback
+  4. Explicit env_file argument                    → full override
+  5. project_key constructor argument              → highest-priority override
+  6. OS environment variables                      → highest-priority override
+
+This means:
+  - Put JIRA_INSTANCE_URL + JIRA_PAT in qdrant-memory-mcp/.env (shared)
+  - Put JIRA_PROJECT_KEY in <caller-repo>/.env (per-project)
+  - Or pass --project ADO on the CLI for a one-off override
 """
 
 import os
@@ -13,57 +38,79 @@ from typing import Dict, Optional, Tuple
 
 class JiraConfig:
     """Centralized JIRA configuration management"""
-    
-    def __init__(self, env_file: Optional[str] = None, project_key: Optional[str] = None):
+
+    def __init__(
+        self,
+        env_file: Optional[str] = None,
+        project_key: Optional[str] = None,
+    ):
         """
-        Initialize JIRA configuration
-        
+        Initialize JIRA configuration.
+
         Args:
-            env_file: Path to .env file (defaults to project root .env)
-            project_key: Optional override for JIRA project key (takes precedence over .env)
+            env_file:    Explicit path to a .env file that fully overrides
+                         auto-discovery (both shared and project-specific vars).
+            project_key: Explicit project key (e.g. "ADO"). Overrides
+                         JIRA_PROJECT_KEY from any .env file. Use this when
+                         invoking the skill from a repo that does not have its
+                         own .env, or to override on a per-command basis via
+                         the --project CLI flag.
         """
-        self.env_file = env_file or self._find_env_file()
         self.config = {}
-        self._load_env()
-        if project_key:
-            self.config['JIRA_PROJECT_KEY'] = project_key
-        self._validate()
-    
-    @staticmethod
-    def _find_env_file() -> str:
-        """Find .env file by searching up directory tree"""
-        # Start from current directory and search up
-        current = Path.cwd()
-        for _ in range(10):  # Search up to 10 levels
-            env_path = current / '.env'
-            if env_path.exists():
-                return str(env_path)
-            if current.parent == current:  # Reached filesystem root
-                break
-            current = current.parent
-        
-        # Fallback to home directory
-        home_env = Path.home() / '.env'
-        if home_env.exists():
-            return str(home_env)
-        
-        return '.env'  # Default, will fail validation if not found
-    
-    def _load_env(self) -> None:
-        """Load environment variables from .env file"""
-        if os.path.exists(self.env_file):
-            with open(self.env_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        if '=' in line:
-                            key, value = line.split('=', 1)
-                            self.config[key.strip()] = value.strip()
-        
-        # Also load from environment (environment takes precedence)
+
+        if env_file:
+            # Caller supplied an explicit file — use it exclusively
+            self._load_env_file(env_file)
+            self.env_file = env_file
+        else:
+            # Layered load: shared creds first, then project-specific overrides
+            skill_env = self._walk_up_for_env(Path(__file__).resolve().parent)
+            caller_env = self._walk_up_for_env(Path.cwd())
+            home_env = Path.home() / '.env'
+
+            loaded = []
+            for candidate in [skill_env, caller_env, home_env if home_env.exists() else None]:
+                if candidate and Path(candidate).exists():
+                    self._load_env_file(str(candidate))
+                    loaded.append(str(candidate))
+
+            self.env_file = loaded[-1] if loaded else '.env'
+
+        # OS environment variables take highest priority
         for key in ['JIRA_INSTANCE_URL', 'JIRA_PAT', 'JIRA_PROJECT_KEY']:
             if key in os.environ:
                 self.config[key] = os.environ[key]
+
+        # Explicit project_key argument overrides everything
+        if project_key:
+            self.config['JIRA_PROJECT_KEY'] = project_key
+
+        self._validate()
+
+    @staticmethod
+    def _walk_up_for_env(start: Path) -> Optional[Path]:
+        """Walk up from *start* looking for a .env file. Returns first match or None."""
+        current = start.resolve()
+        for _ in range(10):
+            candidate = current / '.env'
+            if candidate.exists():
+                return candidate
+            parent = current.parent
+            if parent == current:  # filesystem root
+                break
+            current = parent
+        return None
+
+    def _load_env_file(self, path: str) -> None:
+        """Parse a .env file and merge into self.config (later calls override earlier)."""
+        if not os.path.exists(path):
+            return
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    self.config[key.strip()] = value.strip()
     
     def _validate(self) -> None:
         """Validate required configuration"""
@@ -71,9 +118,13 @@ class JiraConfig:
         missing = [k for k in required if k not in self.config or not self.config[k]]
         
         if missing:
+            # Build a helpful diagnostic showing which .env files were loaded
+            env_sources = getattr(self, 'env_file', 'none')
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}\n"
-                f"Set them in .env file or environment variables"
+                f"Last .env loaded: {env_sources}\n"
+                f"Shared creds (JIRA_INSTANCE_URL, JIRA_PAT): put in qdrant-memory-mcp/.env\n"
+                f"Project key (JIRA_PROJECT_KEY): put in <caller-repo>/.env or pass --project <KEY>"
             )
     
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:

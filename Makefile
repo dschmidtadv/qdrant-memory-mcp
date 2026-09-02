@@ -1,4 +1,4 @@
-.PHONY: help install-modes validate-symlinks clean-symlinks
+.PHONY: help install-modes validate-symlinks clean-symlinks install-jira
 
 # Default target
 help:
@@ -6,12 +6,14 @@ help:
 	@echo "===================================="
 	@echo ""
 	@echo "install-modes          Run setup script and validate all symlinks"
+	@echo "install-jira           Install 'jira' CLI shim to ~/.local/bin"
 	@echo "validate-symlinks      Validate existing symlinks"
 	@echo "clean-symlinks         Remove all symlinks from ~/.roo/"
 	@echo "help                   Display this help message"
 	@echo ""
 	@echo "Usage:"
 	@echo "  make install-modes    # Initial setup for new developers"
+	@echo "  make install-jira     # Install jira CLI (run once per machine)"
 	@echo "  make validate-symlinks # Check symlink status"
 	@echo ""
 
@@ -69,6 +71,11 @@ validate-symlinks:
 		echo "Summary: $$VALID valid, $$INVALID invalid"; \
 		if [[ $$INVALID -gt 0 ]]; then exit 1; fi \
 	'
+
+# Install jira CLI shim to ~/.local/bin
+install-jira:
+	@echo "Installing jira CLI shim..."
+	@bash scripts/install-jira-cli.sh
 
 # Clean up symlinks (with confirmation)
 clean-symlinks:

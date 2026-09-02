@@ -3,7 +3,7 @@ name: jira-manager
 description: This skill should be used when managing JIRA tickets programmatically, including creating issues, updating fields, adding comments, linking tickets, transitioning workflows, and querying JIRA instances. Supports both Jira Cloud and Jira Server/Data Center with PAT (Personal Access Token) Bearer authentication. Uses stdlib-only urllib for maximum compatibility.
 ---
 
-# JIRA Manager Skill (v3.0 - CLI-First)
+# JIRA Manager Skill (v4.0 - CLI-First, Hardened)
 
 ## Purpose
 
@@ -19,13 +19,22 @@ Enable programmatic management of JIRA tickets and projects through a **CLI-firs
 - **Zero Boilerplate** — AI calls the CLI; no 40+ line inline Python scripts needed
 - **Stdlib-Only** — Removed `requests` dependency; uses `urllib` throughout (consistent with SKILL.md intent)
 
+### Hardening Changes from v3.0 (v4.0)
+- **Mandatory Pre-Flight Gate** — `check` is now a blocking gate; all write operations MUST be preceded by a successful `check`
+- **CLI-Only Enforcement** — Explicit FORBIDDEN constraint against generating inline scripts that duplicate `jira_client.py`
+- **Credential Hygiene** — PAT detection guard added; agent must never write `JIRA_PAT = "..."` into source files
+- **comment-First Policy** — `comment` is the default operation for status updates; `update` (description PUT) requires explicit justification
+- **Jira Markup Enforcement** — Markdown syntax (`##`, `**`, `---`) is forbidden in `--body` arguments; Jira Wiki Markup required
+- **Invocation Checklist** — Mandatory 5-step checklist added at top of skill
+- **File Attachment Requirement** — All tickets with specifications, ADRs, or runbooks MUST have files attached to JIRA (not just local `.ai-memory/` references)
+
 ### Environment Variables (Updated)
 
 ```bash
 # .env file
 JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
 JIRA_PAT=<your-personal-access-token>
-JIRA_PROJECT_KEY=AQD
+JIRA_PROJECT_KEY=CLOUD
 ```
 
 **Note:** `JIRA_PAT` is a Personal Access Token, not an API token. Generate via JIRA → Profile → Personal Access Tokens.
@@ -43,22 +52,227 @@ Use this skill when:
 - Integrating JIRA with other tools or processes
 - Working with **Jira Server/Data Center** instances (not Cloud)
 
-## How to Use This Skill
+---
 
-### Step 1: Pre-Flight Check
+## ⚠️ AGENT CONSTRAINTS (Read Before Any Operation)
 
-Always verify JIRA connectivity before attempting operations:
+### CONSTRAINT 1 — CLI-First (FORBIDDEN: Inline Scripts)
 
-```bash
-python3 skills/jira-manager/scripts/jira_client.py check
+> **FORBIDDEN:** Writing one-off Python scripts that duplicate `jira_client.py` functionality.
+>
+> If you are about to create a file containing `urllib.request` + any JIRA API call, **STOP**. Use the canonical CLI instead.
+
+**Violation pattern to detect and block:**
+```python
+# ❌ NEVER generate files like this
+import urllib.request
+JIRA_PAT = "..."          # credential leak
+description = "## Heading"  # Markdown, not Jira markup
+urllib.request.urlopen(...)
 ```
 
-Output:
+**Correct pattern:**
+```bash
+# ✅ Always invoke the canonical CLI via the installed shim
+jira --project ADO comment ADO-241 --body "h2. Status Update..."
+
+# Or with project key from caller's .env:
+jira comment ADO-241 --body "h2. Status Update..."
+```
+
+---
+
+### CONSTRAINT 2 — Credential Hygiene (FORBIDDEN: Hardcoded PAT)
+
+> **FORBIDDEN:** Writing any file that contains a string matching `JIRA_PAT\s*=\s*["'][A-Za-z0-9+/=]{20,}`.
+>
+> If you detect you are about to write a hardcoded PAT into source code, **STOP** and redirect to `.env` loading via `jira_config.py`.
+
+**Correct credential pattern:**
+```bash
+# .env file (never committed — add to .gitignore)
+JIRA_PAT=<your-personal-access-token>
+```
+
+`jira_config.py` reads this automatically. You never need to pass the PAT as a CLI argument or embed it in code.
+
+**If a PAT has been committed to git history:**
+1. Delete the offending file immediately
+2. Rotate the PAT via JIRA → Profile → Personal Access Tokens
+3. Force-push or use `git filter-repo` to scrub history
+
+---
+
+### CONSTRAINT 3 — Jira Wiki Markup Only (FORBIDDEN: Markdown in --body)
+
+> **FORBIDDEN:** Passing Markdown syntax (`##`, `**`, `---`, `_text_`) in `--body` arguments.
+>
+> Jira Server/Data Center REST API v2 renders Markdown as literal characters. Use Jira Wiki Markup.
+
+| Markdown (❌ Wrong) | Jira Wiki Markup (✅ Correct) |
+|---|---|
+| `## Heading` | `h2. Heading` |
+| `**bold**` | `*bold*` |
+| `_italic_` | `_italic_` |
+| `- bullet` | `* bullet` |
+| `---` | `----` |
+| ` ```code``` ` | `{code}code{code}` |
+
+**Pre-send validation:** Before constructing a `--body` argument, scan for `##`, `**`, or ` ``` ` patterns. If found, convert to Jira Wiki Markup equivalents above.
+
+---
+
+### CONSTRAINT 4 — comment > update (Prefer Additive Over Destructive)
+
+> **Default operation for status updates: `comment`**
+>
+> `update` (PUT to description field) **overwrites** the entire description. Use it only when the description itself must change.
+> `comment` is **additive** — it appends to ticket history and preserves all prior content.
+
+| Operation | Effect | When to Use |
+|---|---|---|
+| `comment` | Additive — appends to history | ✅ Status updates, progress notes, findings |
+| `update` | Destructive — overwrites description | ⚠️ Only when description content must change |
+| `transition` | State change | ✅ Moving ticket through workflow |
+
+---
+
+### CONSTRAINT 6 — File Attachment Requirement (MANDATORY for Specifications)
+
+> **REQUIRED:** All tickets created with technical specifications, ADRs, runbooks, implementation plans, or security assessments MUST have the specification file attached to the JIRA ticket.
+>
+> Do NOT rely solely on `.ai-memory/` local file references. The specification must be attached to the ticket so it is discoverable in JIRA UI.
+
+**When to attach:**
+- Technical specifications (e.g., architecture designs, workflow implementations)
+- Architecture Decision Records (ADRs)
+- Deployment runbooks and operational guides
+- Security assessments and incident reports
+- Implementation plans and project proposals
+- Any document >500 lines or critical for implementation
+
+**How to attach (Python pattern):**
+
+```python
+import urllib.request
+import json
+import ssl
+
+# Disable SSL verification for self-signed certs
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
+# Load credentials from jira_config.py
+from jira_config import JiraConfig
+config = JiraConfig()
+
+# Read file
+with open('spec.md', 'rb') as f:
+    file_data = f.read()
+
+# Prepare multipart form-data
+boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+body = (
+    f'--{boundary}\r\n'
+    f'Content-Disposition: form-data; name="file"; filename="spec.md"\r\n'
+    f'Content-Type: text/markdown\r\n\r\n'
+).encode() + file_data + f'\r\n--{boundary}--\r\n'.encode()
+
+# POST to attachment endpoint
+url = f"{config.instance_url}/rest/api/2/issue/{ticket_key}/attachments"
+req = urllib.request.Request(url, data=body)
+req.add_header('Authorization', f'Bearer {config.pat}')
+req.add_header('X-Atlassian-Token', 'no-check')
+req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
+
+with urllib.request.urlopen(req, context=ssl_context) as response:
+    result = json.loads(response.read())
+    attachment_id = result[0]['id']
+    print(f"✅ Attached: {attachment_id}")
+```
+
+**Verification after attachment:**
+```bash
+jira --project AQD get TICKET-KEY
+# Output should show: Attachments: [filename] (ID: XXXXX)
+```
+
+**Reference:** [`.ai-memory/LESSONS-LEARNED-JIRA-ATTACHMENT.md`](../../../.ai-memory/LESSONS-LEARNED-JIRA-ATTACHMENT.md)
+
+---
+
+## ✅ Mandatory Invocation Checklist
+
+Before **every** JIRA operation, verify all 7 gates:
+
+```
+[ ] 1. Pre-flight:   jira check  ← BLOCKING GATE (stop if fails)
+[ ] 2. Credentials:  PAT loaded from .env — NEVER hardcoded in source files
+[ ] 3. Format:       Body uses Jira Wiki Markup (h2., *, ||) — NOT Markdown (##, **)
+[ ] 4. Operation:    comment (additive) preferred over update (destructive)
+[ ] 5. Verify:       jira get <TICKET-ID> after every write
+[ ] 6. Link ops:     Run 'jira link-types' before first 'jira link' call to verify type names
+[ ] 7. Attachments:  If ticket contains specs/ADRs/runbooks, POST /attachments endpoint
+```
+
+---
+
+## One-Time Setup (Per Machine)
+
+Install the `jira` CLI shim to `~/.local/bin` so it is available from any repository:
+
+```bash
+# From the qdrant-memory-mcp project root:
+make install-jira
+```
+
+This creates `~/.local/bin/jira` — a thin wrapper that delegates to [`jira_client.py`](scripts/jira_client.py). After installation, every project on the machine calls `jira` directly with no path hardcoding.
+
+If `~/.local/bin` is not on your `PATH`, the installer will tell you exactly what to add to `~/.zshrc`.
+
+**Verify installation:**
+```bash
+which jira          # → /Users/<you>/.local/bin/jira
+jira --help
+```
+
+---
+
+## How to Use This Skill
+
+### Step 1: Pre-Flight Check (MANDATORY BLOCKING GATE)
+
+**This step is not optional.** Run `check` before any write operation. If it fails, stop and surface the error — do not proceed.
+
+```bash
+# With project key from caller's .env:
+jira check
+
+# With explicit project key (no .env in caller's repo):
+jira --project ADO check
+```
+
+**Success output:**
 ```
 ✅ JIRA connectivity OK
 Instance: https://cmext.ahrq.gov/jira
-Project: AQD
+Project: ADO
 ```
+
+**Failure — stop and surface the error:**
+```
+❌ Authentication failed. Check JIRA_PAT.
+→ ACTION: Verify .env contains valid JIRA_PAT. Rotate token if expired.
+
+❌ Connection refused: https://cmext.ahrq.gov/jira
+→ ACTION: Verify JIRA_INSTANCE_URL. Check network/VPN connectivity.
+
+❌ Project 'XYZ' not found.
+→ ACTION: Verify JIRA_PROJECT_KEY in .env or pass --project <KEY>.
+```
+
+**Do not proceed past Step 1 if `check` fails.**
 
 ### Step 2: Create Issues
 
@@ -105,13 +319,19 @@ Assignee: Unassigned
 
 ### Step 4: Update Issues
 
+> ⚠️ **`update` overwrites the description field entirely.** For status updates and progress notes, use `comment` (Step 5) instead — it is additive and preserves ticket history.
+>
+> Use `update` only when the description content itself must be corrected or replaced.
+
 ```bash
 python3 skills/jira-manager/scripts/jira_client.py update AQD-123 \
   --priority Critical \
   --summary "Updated summary"
 ```
 
-### Step 5: Add Comments
+### Step 5: Add Comments (Preferred for Status Updates)
+
+> ✅ **`comment` is the preferred operation for status updates.** It appends to ticket history without overwriting any existing content.
 
 #### Plain Text Comment
 
@@ -120,9 +340,9 @@ python3 skills/jira-manager/scripts/jira_client.py comment AQD-123 \
   --body "Investigation complete. Root cause identified: DEXI API integration inefficiency."
 ```
 
-#### Comment with JIRA Markup (Recommended)
+#### Comment with Jira Wiki Markup (Required for Structured Content)
 
-Always use JIRA markup for structured comments:
+Always use Jira Wiki Markup — **not Markdown** — for structured comments. Jira Server/Data Center API v2 does not render Markdown; `##`, `**`, and `---` will appear as literal characters.
 
 ```bash
 python3 skills/jira-manager/scripts/jira_client.py comment AQD-123 \
@@ -275,9 +495,68 @@ See [`references/jql-patterns.md`](references/jql-patterns.md) for common JQL qu
 
 ### Step 9: Link Issues
 
+#### Discover Available Link Types (Recommended First Step)
+
 ```bash
-python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 \
-  --type "relates to"
+python3 skills/jira-manager/scripts/jira_client.py link-types
+```
+
+Output:
+```
+Available link types (8 total):
+  Blocks
+    → inward: is blocked by
+    → outward: blocks
+  Cloners
+    → inward: is cloned by
+    → outward: clones
+  Duplicate
+    → inward: is duplicated by
+    → outward: duplicates
+  Relates
+    → inward: relates to
+    → outward: relates to
+```
+
+#### Standard Relationship Links (via /issueLink endpoint)
+
+```bash
+# Link two issues with a standard relationship
+python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 --type "blocks"
+python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 --type "relates to"
+python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 --type "duplicates"
+```
+
+Supported relationship types (call `jira link-types` to discover):
+- `"relates to"` — General relationship
+- `"blocks"` / `"is blocked by"` — Dependency
+- `"clones"` / `"is cloned by"` — Cloning relationship
+- `"duplicates"` / `"is duplicated by"` — Duplication
+- And more (instance-specific)
+
+#### Hierarchical Links (Epic / Parent)
+
+```bash
+# Link to epic (custom field)
+python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 --type epic
+
+# Link to parent (custom field)
+python3 skills/jira-manager/scripts/jira_client.py link AQD-123 AQD-456 --type parent
+```
+
+**Note:** Hierarchical links require the custom fields to be configured on the issue screen. If you see `❌ Link field 'epic' not available on issue screen`, contact your JIRA admin to enable the field.
+
+#### Verifying Links
+
+After linking, verify the link was created:
+
+```bash
+python3 skills/jira-manager/scripts/jira_client.py get AQD-123
+
+# Output now shows:
+# ...
+# Links:
+#   blocks → AQD-456 (In Progress)
 ```
 
 ## Complete Workflow Example
@@ -301,9 +580,15 @@ python3 skills/jira-manager/scripts/jira_client.py comment AQD-9999 \
 python3 skills/jira-manager/scripts/jira_client.py transition AQD-9999 \
   --to "In Progress"
 
-# Step 5: Link to related issue
+# Step 5: Discover link types before linking
+python3 skills/jira-manager/scripts/jira_client.py link-types
+
+# Step 6: Link to related issue
 python3 skills/jira-manager/scripts/jira_client.py link AQD-9999 AQD-8888 \
   --type "relates to"
+
+# Step 7: Verify link was created
+python3 skills/jira-manager/scripts/jira_client.py get AQD-9999
 ```
 
 ## Configuration
@@ -383,66 +668,7 @@ Options:
 - `--priority` — Priority (High, Medium, Low)
 - `--assignee` — Assignee email
 - `--labels` — Comma-separated labels
-- `--story-points` — Story Points value (auto-discovers field ID on this JIRA instance)
-- `--original-estimate` — Original Estimate in seconds (auto-discovers field ID; 3600 = 1 hour, 28800 = 8 hours, 86400 = 1 day)
 - `--json` — Output JSON response
-
-#### Create with Story Points and Original Estimate
-
-```bash
-python3 jira_client.py create \
-  --type Story \
-  --summary "User authentication flow" \
-  --description "Implement OAuth 2.0" \
-  --story-points 13
-```
-
-**Field Auto-Discovery:**
-
-Story Points and Original Estimate fields are auto-discovered by querying the JIRA instance's `/field` endpoint. This means:
-- Works with any JIRA instance (Cloud, Server, Data Center)
-- Automatically finds the correct custom field ID for your instance
-- Results are cached to avoid repeated API calls
-- If a field is not configured on the issue screen, you'll get a validation error
-
-**Testing with CLOUD Project:**
-
-```bash
-# Create with Story Points
-python3 jira_client.py --project CLOUD create \
-  --type Task \
-  --summary "Sprint task" \
-  --story-points 8
-
-# Update Story Points
-python3 jira_client.py --project CLOUD update CLOUD-123 \
-  --story-points 13
-
-# Verify Story Points on existing issue
-python3 jira_client.py --project CLOUD update CLOUD-2000 --story-points 5
-python3 jira_client.py --project CLOUD get CLOUD-2000 --json | grep customfield_10106
-# Output: "customfield_10106": 5.0
-```
-
-**Field Availability (CLOUD Project Verified):**
-
-| Field | Status | Notes |
-|---|---|---|
-| Story Points | ✅ WORKING | Fully functional - auto-discovers to `customfield_10106` |
-| Original Estimate | ⚠️ NOT SETTABLE | Visible in UI but REST API v2 cannot set it (JIRA configuration issue) |
-
-**If a field is not available:**
-```
-❌ Validation error: {'fieldname': "Field 'fieldname' cannot be set. It is not on the appropriate screen, or unknown."}
-```
-
-**Solution:** Contact your JIRA administrator to configure the field for REST API access in Project Settings → Issue Types → Screens.
-
-**Real-World Testing Results (CLOUD Project):**
-- ✅ Created multiple issues with Story Points (5, 8, 13, 21)
-- ✅ Updated Story Points on existing issues (CLOUD-2000, CLOUD-2007, CLOUD-2008, etc.)
-- ✅ Values persist correctly in JIRA
-- ✅ Field auto-discovery caching works
 
 #### `get`
 Get issue details.
@@ -459,23 +685,6 @@ python3 jira_client.py update AQD-123 \
   --summary "New summary" \
   --priority Critical
 ```
-
-**Update with Story Points and Original Estimate:**
-
-```bash
-python3 jira_client.py update AQD-123 \
-  --story-points 8 \
-  --original-estimate 86400
-```
-
-Options:
-- `--summary` — New summary
-- `--description` — New description
-- `--priority` — New priority
-- `--assignee` — New assignee email
-- `--labels` — Comma-separated labels
-- `--story-points` — Story Points value (auto-discovers field ID)
-- `--original-estimate` — Original Estimate in seconds (auto-discovers field ID)
 
 #### `comment`
 Add comment to issue.
@@ -511,18 +720,44 @@ python3 jira_client.py search \
 ```
 
 #### `link`
-Link two issues using custom fields (Epic Link, Parent Link, Initiative Link).
+Link two issues with a relationship.
+
+Supports both standard relationships (`/issueLink` endpoint) and hierarchical links (`/issue` custom fields).
 
 ```bash
+# Standard relationship (via /issueLink)
+python3 jira_client.py link AQD-123 AQD-456 --type "relates to"
+
+# Hierarchical (via custom field)
 python3 jira_client.py link AQD-123 AQD-456 --type epic
 ```
 
-Available link types:
-- `epic` — Link to Epic (customfield_10100)
-- `parent` — Link to Parent (customfield_10901)
-- `initiative` — Link to Initiative (customfield_11022)
+Options:
+- `--type` — Relationship type (default: "relates to"). Run `jira link-types` to see available types on your instance.
 
-**Note:** Link fields must be configured on issue screens in JIRA Project Settings.
+**Tip:** Call `jira link-types` before linking to discover exact type names.
+
+#### `link-types`
+List all available issue link types on this JIRA instance.
+
+```bash
+python3 jira_client.py link-types
+python3 jira_client.py link-types --json
+```
+
+Output:
+```
+Available link types (8 total):
+  Blocks
+    → inward: is blocked by
+    → outward: blocks
+  ...
+```
+
+This command is useful for:
+- Discovering valid relationship names before calling `jira link`
+- Checking instance-specific link types (varies by configuration)
+- Scripting link operations reliably
 
 #### `release-notes`
 Generate release notes from JIRA issues by fixVersion, label, or epic.
@@ -579,49 +814,6 @@ The CLI provides clear, actionable error messages:
 Available: Start Progress, Resolve, Close
 ```
 
-## Custom Field Auto-Discovery
-
-The `create` and `update` commands support **automatic field ID discovery** for Story Points and Original Estimate:
-
-### How It Works
-
-When you use `--story-points` or `--original-estimate`, the CLI:
-1. Queries the `/field` endpoint to get all available fields
-2. Searches by field name (case-insensitive)
-3. Caches the result to avoid repeated API calls
-4. Uses the discovered field ID for the create/update operation
-
-### Supported Fields
-
-| Field Name | Built-in ID | Discovery | Notes |
-|---|---|---|---|
-| Story Points | `customfield_10106` | Auto-discovered | Usually available on most instances |
-| Original Estimate | `timeoriginalestimate` | Auto-discovered | May require JIRA admin to enable on issue screens |
-
-### Example
-
-```bash
-# Auto-discovers Story Points field for your JIRA instance
-python3 jira_client.py --project CLOUD create \
-  --type Task \
-  --summary "Sprint task" \
-  --story-points 8
-```
-
-The first call discovers the field ID; subsequent calls use the cached result.
-
-### Troubleshooting Auto-Discovery
-
-If you see:
-```
-❌ Validation error: {'fieldname': "Field 'fieldname' cannot be set. It is not on the appropriate screen..."}
-```
-
-The field exists but is not configured on the issue screen. Contact your JIRA administrator to:
-1. Go to Project Settings → Issue Types → Screens
-2. Add the field to the appropriate screens
-3. Try again
-
 ## References
 
 - **JQL Patterns:** [`references/jql-patterns.md`](references/jql-patterns.md) — Common query patterns
@@ -654,21 +846,121 @@ The field exists but is not configured on the issue screen. Contact your JIRA ad
 ### Connection Error
 **Solution:** Verify JIRA instance is accessible. Check firewall rules and network connectivity.
 
+## Cross-Repo Invocation
+
+The skill lives in `qdrant-memory-mcp` but is designed to be called from **any repository**. Four mechanisms make this work without copying files.
+
+### Split Credential Model
+
+JIRA credentials have different ownership scopes and must be stored separately:
+
+| Variable | Scope | Where to Put It |
+|---|---|---|
+| `JIRA_INSTANCE_URL` | Shared — same Jira server for all projects | `qdrant-memory-mcp/.env` |
+| `JIRA_PAT` | Shared — your personal token, works across all projects | `qdrant-memory-mcp/.env` |
+| `JIRA_PROJECT_KEY` | Per-project — `ADO`, `AQD`, `EHCD`, etc. | `<caller-repo>/.env` or `--project` flag |
+
+**Do not put `JIRA_PROJECT_KEY` in the shared `.env`.** It will be overridden by the caller's `.env` or `--project` flag anyway, but having the wrong key in the shared file causes confusing failures.
+
+### Mechanism 1: sys.path Auto-Injection (Automatic)
+
+[`jira_client.py`](scripts/jira_client.py) inserts its own directory into `sys.path` at startup, so `jira_config` is always importable regardless of the caller's `cwd`. No `cd` required.
+
+```bash
+# Works from ANY directory — no cd needed
+python3 /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py check
+```
+
+### Mechanism 2: Layered .env Discovery (Automatic)
+
+[`jira_config.py`](scripts/jira_config.py) loads **all** `.env` files it finds, merging them (later sources override earlier ones):
+
+| Load Order | Location | Provides |
+|---|---|---|
+| 1st | Walk up from script's own directory | `JIRA_INSTANCE_URL`, `JIRA_PAT` (shared) |
+| 2nd | Walk up from `cwd` | `JIRA_PROJECT_KEY` (per-project override) |
+| 3rd | `$HOME/.env` | Global fallback |
+| 4th | OS environment variables | Highest-priority override |
+
+**Recommended setup:**
+
+```bash
+# qdrant-memory-mcp/.env  (shared — never committed)
+JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
+JIRA_PAT=<your-personal-access-token>
+
+# <caller-repo>/.env  (per-project — never committed)
+JIRA_PROJECT_KEY=ADO
+```
+
+### Mechanism 3: --project Flag (Per-Invocation Override)
+
+Override the project key on the CLI without editing any `.env` file:
+
+```bash
+python3 /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py \
+  --project ADO \
+  check
+
+python3 /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py \
+  --project ADO \
+  comment ADO-241 --body "h2. Status Update..."
+```
+
+Use `--project` when:
+- The caller's repo has no `.env`
+- You need to target a different project than what's in `.env`
+- Running one-off commands from a CI/CD pipeline
+
+### Mechanism 4: --env-file Flag (Full Override)
+
+When you need to supply all three variables from a single explicit file:
+
+```bash
+python3 /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira-manager/scripts/jira_client.py \
+  --env-file /path/to/other-repo/.env \
+  check
+```
+
+### Cross-Repo Invocation Diagnostic
+
+If `check` fails with a missing-variable error, run this to see which `.env` files were loaded and what was resolved:
+
+```bash
+python3 -c "
+import sys
+sys.path.insert(0, '/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira-manager/scripts')
+from jira_config import JiraConfig
+c = JiraConfig()
+print('env_file (last loaded):', c.env_file)
+print('instance:', c.instance_url)
+print('project:', c.project_key)
+print('pat (masked):', '***' + c.pat[-4:])
+"
+```
+
+---
+
 ## Design Principles
 
 This skill follows these principles:
 
-1. **CLI-First** — Every operation callable via terminal; no wrapper scripts needed
-2. **Reusable** — `jira_client.py` is the canonical implementation; SKILL.md references it
+1. **CLI-First** — Every operation callable via terminal; no wrapper scripts needed; inline script generation is FORBIDDEN
+2. **Reusable** — `jira_client.py` is the canonical implementation; SKILL.md references it, never duplicates it
 3. **Stdlib-Only** — No external dependencies; uses `urllib` throughout
 4. **Zero-Boilerplate** — Templates and config eliminate repetitive setup
 5. **Composable** — Unix philosophy; operations pipe together
 6. **Discoverable** — Help text and references guide users to correct usage
+7. **Credential-Safe** — PAT always loaded from `.env`; never hardcoded in source files
+8. **Additive-First** — `comment` preferred over `update`; preserve ticket history by default
+9. **Markup-Correct** — Jira Wiki Markup enforced; Markdown syntax forbidden in API payloads
+10. **Cross-Repo** — Invocable from any repository via absolute path; no local copy required
 
 ## Version History
 
-- **v4.3** (2026-08-03) — Story Points & Original Estimate support with auto-discovery. Uses `/field` endpoint to discover custom field IDs, works with any JIRA instance (Cloud, Server, Data Center). Tested with CLOUD project.
-- **v4.0-4.2** — Hardened CLI with pre-flight gates, file attachments, issue linking
+- **v4.2** (2026-07-23) — Issue linking fix: dual-strategy linker supports both `/issueLink` standard relationships and custom field hierarchical links; added `link-types` discovery command; improved `get` output shows linked issues; structured error messages for link failures
+- **v4.1** (2026-06-01) — Cross-repo fix: `sys.path` auto-injection in `jira_client.py`; script-relative `.env` discovery in `jira_config.py`; `--env-file` global flag; cross-repo invocation guide in SKILL.md
+- **v4.0** (2026-06-01) — Hardened: mandatory pre-flight gate, CLI-only enforcement, credential hygiene guard, comment-first policy, Jira markup enforcement, invocation checklist
 - **v3.0** (2026-04-29) — CLI-first architecture, templates, centralized config
 - **v2.0** — Stdlib urllib, Bearer auth, Server/Data Center support
 - **v1.0** — Initial release with requests library

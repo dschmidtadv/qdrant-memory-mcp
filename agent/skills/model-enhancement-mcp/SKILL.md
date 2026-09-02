@@ -1,5 +1,5 @@
 ---
-name: model-enhancement-servers
+name: model-enhancement-mcp
 description: Guide for creating MCP servers that enhance LLM reasoning through structured processes, persistence, and workflow guidance. Use when building MCP servers for structured thinking, journaling, memory systems, or other cognitive enhancement patterns.
 ---
 

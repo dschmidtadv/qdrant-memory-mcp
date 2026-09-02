@@ -1,3 +1,8 @@
+---
+name: aws-lambda-management
+description: AWS Lambda function deployment, management, and monitoring for DevOps and cloud engineers.
+---
+
 # AWS Lambda Management Skill
 
 **Status:** ACTIVE  
