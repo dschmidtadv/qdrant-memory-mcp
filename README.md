@@ -19,6 +19,7 @@ A high-performance, production-ready memory system for AI agents combining Qdran
 - [Deployment](#deployment)
 - [Agent Integration (Three-Brain Workflow)](#agent-integration-three-brain-workflow)
 - [Cross-Project Deployment (Phase 6)](#cross-project-deployment-phase-6)
+- [Global Skills System](#global-skills-system)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
 - [License](#license)
@@ -50,8 +51,9 @@ Qdrant-MCP is a headless, high-performance memory system that replaces tradition
 ✅ **Hybrid Embeddings:** Seamless switching between local Ollama (768-dim) and AWS Bedrock (1024-dim)  
 ✅ **Environment-Aware Collections:** `agent-memory` (local) vs `agent-memory-prod` (production)  
 ✅ **Production Monitoring:** 9 metrics, 8 alert rules, Prometheus + Grafana dashboards  
-✅ **Global Rules System:** Dynamic project detection, centralized agent configuration  
-✅ **Cross-Project Support:** 5 projects deployed with unified memory system  
+✅ **Global Rules System:** Dynamic project detection, centralized agent configuration
+✅ **Global Skills System:** 19 skills in `~/.claude/skills/`, symlinked to 81 Zoo Code projects
+✅ **Cross-Project Support:** 81 projects deployed with unified memory and skills system
 ✅ **Tool Filtering:** 42% reduction in available tools (145 → 87), eliminates dangerous operations  
 ✅ **Golden Rules Caching:** 64% token reduction per prompt (target: 20-30%)  
 ✅ **Production Ready:** 100% test pass rate (29/29 tests), zero breaking changes  
@@ -799,7 +801,7 @@ Deployment steps:
 1. Copy global rules from ~/.roo/rules-{architect,code,orchestrator,documentation-writer}/memory.md to this project's agent/rules-{mode}/ directories
 2. Create symlink: ln -s ~/.roo/rules-code/settings/roo-code-settings.json agent/roo-code-settings.json
 3. Initialize Qdrant memory with this project's context using memorize_context(project="{PROJECT_NAME}", ...)
-4. Run tests/phase-5a-3sv-unit-tests.sh to verify 3SV protocol is operational
+4. Run /Users/dietrichgottfriedschmidt/qdrant-memory-mcp/tests/phase-5a-3sv-unit-tests.sh to verify 3SV protocol is operational
 5. Verify tool filtering is active (should show 87 tools, not 145)
 
 Expected outcomes:
@@ -891,6 +893,130 @@ recall_context(
 - **Test Suite:** [`tests/phase-5a-3sv-unit-tests.sh`](tests/phase-5a-3sv-unit-tests.sh)
 - **Configuration:** [`agent/roo-code-settings.json`](agent/roo-code-settings.json)
 - **Tool Filter:** [`agent/mcp-tool-filter.json`](agent/mcp-tool-filter.json)
+
+---
+
+## Global Skills System
+
+### Overview
+
+Zoo Code (formerly Roo Code) discovers skills from directories containing `SKILL.md` files with YAML frontmatter. All skills are centralized in `~/.claude/skills/` and made available to every project via symlinks.
+
+### Architecture (Single Source of Truth)
+
+```
+~/.claude/skills/                    ← All skills live here (canonical source)
+    ├── aws-infrastructure/SKILL.md
+    ├── gitnexus/SKILL.md
+    ├── jira-manager/SKILL.md
+    └── ... (19 skill directories)
+
+Symlink Fan-Out:
+    ~/.agents/skills  → ~/.claude/skills    (Zoo Code global search path)
+    ~/.roo/skills     → ~/.claude/skills    (Zoo Code global search path)
+    {project}/.claude/skills → ~/.claude/skills  (per-project, ×81 projects)
+```
+
+### Zoo Code Skill Discovery Paths
+
+Zoo Code v3.80.x searches these directories (in order):
+
+| Path | Source | Type |
+|------|--------|------|
+| `~/.agents/skills/` | Global | Primary |
+| `~/.agents/skills-{mode}/` | Global | Mode-specific |
+| `{cwd}/.agents/skills/` | Project | Primary |
+| `{cwd}/.agents/skills-{mode}/` | Project | Mode-specific |
+| `~/.roo/skills/` | Global | Legacy |
+| `~/.roo/skills-{mode}/` | Global | Legacy mode-specific |
+| `{cwd}/.roo/skills/` | Project | Legacy |
+| `{cwd}/.roo/skills-{mode}/` | Project | Legacy mode-specific |
+
+> **Note:** Zoo Code does NOT natively search `~/.claude/skills/`. The symlinks at `~/.agents/skills` and `~/.roo/skills` bridge this gap.
+
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `aws-cloudwatch-observability` | CloudWatch metrics, log analysis, alarm inspection |
+| `aws-ecs-troubleshooting` | ECS Fargate task diagnostic runbook |
+| `aws-iam-analysis` | IAM security review and compliance assessment |
+| `aws-infrastructure` | Terraform & CLI management with .env-based profiles |
+| `aws-lambda-management` | Lambda deployment, management, and monitoring |
+| `aws-ssm-connection` | SSM Session Manager for EC2/container operations |
+| `gitnexus` | Code intelligence: call graphs, blast radius, refactoring |
+| `indexing-manager` | Push/sync .ai-memory files to Qdrant or vector stores |
+| `jira-manager` | JIRA ticket management via CLI and API |
+| `lindy-expert` | Lindy AI agent creation and business automation |
+| `mcp-builder` | Guide for building MCP servers (Python/Node) |
+| `puppeteer-automation` | Browser automation, scraping, testing |
+| `skill-creator` | Guide for creating new skills |
+| `ugip` | Unified Global Initialization Protocol |
+
+### SKILL.md Frontmatter Requirements
+
+Each skill directory must contain a `SKILL.md` with YAML frontmatter:
+
+```yaml
+---
+name: my-skill-name          # Must match directory name exactly
+description: "Short description (1-1024 chars, required)"
+triggers:                     # Optional: keywords for auto-discovery
+  - keyword1
+  - keyword2
+modeSlugs:                    # Optional: restrict to specific modes
+  - code
+  - architect
+---
+
+# Skill Content (Markdown)
+Instructions loaded when the skill is invoked...
+```
+
+**Validation rules** (Zoo Code will silently skip invalid skills):
+- `name` must be a string and must match the directory name
+- `description` must be 1-1024 characters
+- Directory name must be lowercase with hyphens only
+
+### Adding a New Skill
+
+1. Create the skill directory and `SKILL.md`:
+   ```bash
+   mkdir ~/.claude/skills/my-new-skill
+   cat > ~/.claude/skills/my-new-skill/SKILL.md << 'EOF'
+   ---
+   name: my-new-skill
+   description: "What this skill does and when to use it."
+   ---
+   # My New Skill
+   Instructions here...
+   EOF
+   ```
+
+2. The skill is **immediately available** in all 81 projects (via symlinks). Reload the Zoo Code window (`Cmd+Shift+P` → `Developer: Reload Window`) to pick it up.
+
+### Deployment Script
+
+To deploy skills infrastructure to a new project:
+
+```bash
+# 1. Deploy agent/roo-code-settings.json (required bootstrap file)
+mkdir -p ~/apps/new-project/agent
+cp /tmp/roo-code-settings-template.json ~/apps/new-project/agent/roo-code-settings.json
+
+# 2. Symlink skills directory
+ln -sf ~/.claude/skills ~/apps/new-project/.claude/skills
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "No global skills yet" in Skills panel | Verify `~/.agents/skills` symlink exists: `ls -la ~/.agents/skills` |
+| Skills not loading after adding | Reload Zoo Code window: `Cmd+Shift+P` → Developer: Reload Window |
+| Skill appears in dir but not in panel | Check `SKILL.md` frontmatter: `name` must match dir name, `description` required |
+| `skill()` tool returns "not found" | Verify SKILL.md exists and has valid YAML frontmatter |
+| Symlink broken | Recreate: `ln -sf ~/.claude/skills ~/.agents/skills` |
 
 ---
 
