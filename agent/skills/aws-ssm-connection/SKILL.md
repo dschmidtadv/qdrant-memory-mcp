@@ -1,291 +1,279 @@
 ---
 name: aws-ssm-connection
 description: Execute commands on AWS EC2 instances via SSM Session Manager. Handles instance discovery, session management, container operations, and command execution. Use for remote SSH-like access, Docker container commands, Drush operations, and instance diagnostics.
-triggers:
-  - ssm
-  - session-manager
-  - ec2-command
-  - instance
-  - docker-exec
-  - drush
-  - remote-command
 ---
 
 # AWS SSM Connection Skill
 
-Execute commands on AWS EC2 instances via AWS Systems Manager Session Manager without requiring SSH keys or port 22 access.
+Execute commands on AWS EC2 instances via AWS Systems Manager. Uses **direct SSM** (`ssm:SendCommand` or `ssm:StartSession`) as the primary method; falls back to **bastion host / Jenkins proxy** only when direct SSM is unavailable.
+
+## Connection Strategy
+
+```
+┌─────────────────────────────────────────┐
+│  1. DIRECT SSM (Primary)                │
+│     ssm:SendCommand / StartSession      │
+│     ↓ fails?                            │
+│  2. BASTION HOST (Fallback)             │
+│     SSH → bastion → SSM from bastion    │
+│     ↓ fails?                            │
+│  3. JENKINS PROXY (Last Resort)         │
+│     Trigger Jenkins job with SSM step   │
+└─────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
-1. **AWS CLI** installed locally (`aws --version`)
+1. **AWS CLI v2** installed (`aws --version`)
 2. **Session Manager Plugin** installed (`which session-manager-plugin`)
-3. **Valid AWS credentials** configured (via Kion, SSO, or IAM keys)
-4. **Instance ID** of the target EC2 instance
-5. **IAM permissions** on the instance (SSM agent running, IAM instance profile with SSM permissions)
+3. **Valid AWS credentials** configured (Kion/SSO temporary credentials in `~/.aws/credentials`)
+
+## Environment Registry
+
+### Production Instances (as of 2026-09-04)
+
+| Project | Account | Profile | Instance ID | Name | IP |
+|---------|---------|---------|-------------|------|-----|
+| **AHRQGOV** | 406380712964 | `406380712964_ct-ahrqgov-dev-role` | `i-01b8189e854b8931a` | AHRQ Jenkins 3 | 10.61.0.210 |
+| **AHRQGOV** | 406380712964 | `406380712964_ct-ahrqgov-dev-role` | `i-0be8692a6043b7e8e` | AHRQGOV Production Auto Scaled Servers | 10.61.1.216 |
+| **AHRQGOV** | 406380712964 | `406380712964_ct-ahrqgov-dev-role` | `i-032a93fb658548844` | AHRQGOV Production Auto Scaled Servers | 10.61.12.101 |
+| **EHC** | 975242026693 | `975242026693_ct-ehc-dev-role` | `i-0fe93a37aa4a5551b` | EHC Production Auto Scaled Servers | 10.58.4.102 |
+| **EHC** | 975242026693 | `975242026693_ct-ehc-dev-role` | `i-0ad7ccb3f024401a9` | EHC Production Auto Scaled Servers | 10.58.9.146 |
+| **PSO** | 225577488556 | `225577488556_ct-pso-dev-role` | `i-07d80f94de705fd88` | PSO Production Auto Scaled Instances | 10.59.1.6 |
+| **PSO** | 225577488556 | `225577488556_ct-pso-dev-role` | `i-026f2640c70a49e5d` | PSO Production Auto Scaled Instances | 10.59.3.245 |
+
+### Staging Instances
+
+| Project | Account | Profile | Instance ID | Name |
+|---------|---------|---------|-------------|------|
+| **PSO** | 225577488556 | `225577488556_ct-pso-dev-role` | `i-0a229c8ae49c2734f` | PSO Stage Auto Scaled Servers |
+
+### Container Names by Project
+
+| Project | Container Name | Used For |
+|---------|---------------|----------|
+| AHRQGOV | `ahrqgov-drupal-web` | Drupal web server |
+| EHC | `ehc-drupal-web` | Drupal web server |
+| PSO | `pso-drupal-web` | Drupal web server |
+
+> **Note:** Instance IDs for Auto Scaled instances change on scale events. Always run `ssm describe-instance-information` to discover current instances before targeting.
+
+---
 
 ## Pre-Flight Check
-
-Before executing any SSM commands:
 
 ### Step 0: Credential Selection
 
 **MANDATORY:** Read the active project's `.env` to discover the default profile, then ask the user which credential method to use.
 
 ```bash
-# Read .env from the current workspace root
 cat .env | grep -E "AWS_PROFILE|AWS_REGION"
 ```
 
-Once you have the `.env` values, present the user with this exact choice **before proceeding**:
+Present the user with:
 
-> I found `AWS_PROFILE=<VALUE_FROM_ENV>` in your `.env`.
-> How would you like to authenticate for this SSM session?
+> I found `AWS_PROFILE=<VALUE>` in your `.env`.
+> How would you like to authenticate?
 >
-> **[1] Use .env profile (default)** — `--profile <VALUE_FROM_ENV>`
-> **[2] Use a different named profile** — I'll ask you for the profile name
-> **[3] Use explicit access keys** — I'll ask you for `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optionally `AWS_SESSION_TOKEN`
+> **[1] Use .env profile (default)** — `--profile <VALUE>`
+> **[2] Use a different named profile** — I'll ask for the name
+> **[3] Use explicit access keys** — I'll ask for Key/Secret/Token
 
-**Branch A — .env profile (option 1):**
-Use `--profile <VALUE_FROM_ENV>` in all commands. Proceed to Step 1.
-
-**Branch B — different named profile (option 2):**
-Ask: "What is the AWS profile name?" Then use `--profile <USER_PROVIDED_PROFILE>`. Proceed to Step 1.
-
-**Branch C — explicit access keys (option 3):**
-Ask for `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` (if using STS/MFA).
-Prepend all commands with the environment variables instead of `--profile`:
-```bash
-AWS_ACCESS_KEY_ID=<KEY> AWS_SECRET_ACCESS_KEY=<SECRET> AWS_SESSION_TOKEN=<TOKEN> \
-  aws ssm start-session ...
-```
-Do NOT use `--profile` flag when using explicit keys. Proceed to Step 1.
-
-**If `.env` is missing or does not define `AWS_PROFILE`:** Skip option 1 and offer only options 2 and 3.
-
-### Step 1: Verify AWS credentials
+### Step 1: Verify credentials
 
 ```bash
-aws sts get-caller-identity --profile <PROFILE_NAME>
-```
-Confirm the Account ID and Role match the target instance's account.
-
-### Step 2: Verify instance exists and is running
-
-```bash
-aws ec2 describe-instances --instance-ids <INSTANCE_ID> --region <REGION> --profile <PROFILE_NAME> \
-  --query "Instances[0].[State.Name,PrivateIpAddress,Tags[?Key=='Name'].Value|[0]]" --output text
+aws sts get-caller-identity --profile <PROFILE> --region us-east-1
 ```
 
-### Step 3: Test SSM connectivity
+### Step 2: Verify SSM connectivity (determines direct vs fallback)
 
 ```bash
-aws ssm describe-instance-information --instance-information-filter-list "key=InstanceIds,valueSet=<INSTANCE_ID>" \
-  --region <REGION> --profile <PROFILE_NAME>
+aws ssm describe-instance-information \
+  --profile <PROFILE> --region us-east-1 \
+  --query 'InstanceInformationList[*].[InstanceId,ComputerName,PingStatus]' \
+  --output table
 ```
 
-### Step 4: Fallback - Bastion Host Connection (if SSM not available)
+**If this succeeds** → Use **Direct SSM** (Method 1)
+**If this fails with ExpiredTokenException** → Refresh credentials, retry
+**If this fails with AccessDeniedException** → Use **Bastion Fallback** (Method 2)
 
-If direct SSM connection is not possible (SSM agent not running, IAM permissions missing, or network restrictions), use a bastion host as an alternative:
+### Step 3: Test SendCommand permission
 
 ```bash
-# Connect to bastion host
-ssh <USERNAME>@<BASTION_HOSTNAME>
+aws ssm send-command \
+  --profile <PROFILE> --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "<INSTANCE_ID>" \
+  --parameters 'commands=["echo SSM-connectivity-OK"]' \
+  --query 'Command.CommandId' --output text
+```
 
-# Example:
+**If this succeeds** → Use **SendCommand** for non-interactive operations (preferred for automation)
+**If this fails with AccessDeniedException** → Use **StartSession** instead, or fall back to bastion
+
+---
+
+## Method 1: Direct SSM (PRIMARY)
+
+### Pattern A: SendCommand (Non-Interactive — Preferred for Automation)
+
+Best for: scripted commands, Drush operations, Docker exec, CI/CD.
+Returns structured output. No interactive terminal needed.
+
+```bash
+# Send command
+CMD_ID=$(aws ssm send-command \
+  --profile <PROFILE> --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "<INSTANCE_ID>" \
+  --parameters 'commands=["<YOUR_COMMAND>"]' \
+  --comment "<DESCRIPTION>" \
+  --query 'Command.CommandId' --output text)
+
+# Wait for completion (poll every 2 seconds)
+sleep 5
+
+# Retrieve output
+aws ssm get-command-invocation \
+  --profile <PROFILE> --region us-east-1 \
+  --command-id "$CMD_ID" \
+  --instance-id "<INSTANCE_ID>" \
+  --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+```
+
+**Examples:**
+
+```bash
+# Docker ps
+aws ssm send-command --profile 406380712964_ct-ahrqgov-dev-role --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "i-0be8692a6043b7e8e" \
+  --parameters 'commands=["sudo docker ps --format \"table {{.Names}}\t{{.Image}}\t{{.Status}}\""]' \
+  --query 'Command.CommandId' --output text
+
+# Drush cache rebuild
+aws ssm send-command --profile 225577488556_ct-pso-dev-role --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "i-07d80f94de705fd88" \
+  --parameters 'commands=["sudo docker exec pso-drupal-web drush cr"]' \
+  --query 'Command.CommandId' --output text
+
+# Drush status
+aws ssm send-command --profile 975242026693_ct-ehc-dev-role --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "i-0fe93a37aa4a5551b" \
+  --parameters 'commands=["sudo docker exec ehc-drupal-web drush status"]' \
+  --query 'Command.CommandId' --output text
+```
+
+### Pattern B: StartSession with Interactive Command (Semi-Interactive)
+
+Best for: single commands that need a pseudo-terminal, quick checks.
+
+```bash
+aws ssm start-session --target <INSTANCE_ID> \
+  --document-name AWS-StartInteractiveCommand \
+  --parameters "command=['<YOUR_COMMAND>']" \
+  --region us-east-1 \
+  --profile <PROFILE>
+```
+
+**Examples:**
+
+```bash
+# List containers on PSO production
+aws ssm start-session --target i-07d80f94de705fd88 \
+  --document-name AWS-StartInteractiveCommand \
+  --parameters "command=['sudo docker ps --format \"table {{.Names}}\t{{.Image}}\"']" \
+  --region us-east-1 --profile 225577488556_ct-pso-dev-role
+
+# Drush config:get on AHRQGOV
+aws ssm start-session --target i-0be8692a6043b7e8e \
+  --document-name AWS-StartInteractiveCommand \
+  --parameters "command=['sudo docker exec ahrqgov-drupal-web drush config:get system.site name']" \
+  --region us-east-1 --profile 406380712964_ct-ahrqgov-dev-role
+```
+
+### Pattern C: StartSession (Fully Interactive Shell)
+
+Best for: debugging, file browsing, real-time troubleshooting.
+
+```bash
+aws ssm start-session --target <INSTANCE_ID> \
+  --region us-east-1 \
+  --profile <PROFILE>
+```
+
+> **Note:** Interactive sessions are not suitable for agent automation. Use SendCommand for scripted operations.
+
+---
+
+## Method 2: Bastion Host Fallback
+
+Use when direct SSM is unavailable (SSM agent down, IAM permissions missing, or network restrictions).
+
+### Step 1: SSH to bastion
+
+```bash
 ssh dietrich.gottfriedsc@ahrq.local@ahrq-jenkins-03.ahrq.local
 ```
 
-Once connected to the bastion, elevate to the deployment user:
+### Step 2: Elevate to deployment user
 
 ```bash
-sudo su - <DEPLOY_USER>@<DOMAIN>
-
-# Example:
 sudo su - ahrqgovjenkins.deploy@ahrq.local
 ```
 
-**Using SSM Session Manager from the Bastion Host:**
+### Step 3: Use SSM from bastion with explicit credentials
 
-Once connected and elevated to the deployment user, you can use AWS Systems Manager Session Manager to connect to instances in environments that require bastion-mediated access. The bastion host does NOT use AWS CLI config profiles; instead, use environment variables for authentication:
+The bastion host does NOT use AWS CLI config profiles; use environment variables:
 
 ```bash
-# From bastion (as deployment user), use environment variables for AWS credentials
 AWS_ACCESS_KEY_ID=<KEY> AWS_SECRET_ACCESS_KEY=<SECRET> AWS_SESSION_TOKEN=<TOKEN> \
   aws ssm start-session --target <INSTANCE_ID> \
   --document-name AWS-StartInteractiveCommand \
   --parameters "command=['<YOUR_COMMAND>']" \
-  --region <REGION>
-
-# Example:
-AWS_ACCESS_KEY_ID=AKIA... AWS_SECRET_ACCESS_KEY=... \
-  aws ssm start-session --target i-0be8692a6043b7e8e \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['whoami']" \
   --region us-east-1
 ```
 
-**Common Bastion Configurations:**
+### Bastion Configuration
 
-| Environment | Bastion Host | Username | Deployment User | Authentication |
-|-------------|--------------|----------|-----------------|-----------------|
-| AHRQ | `ahrq-jenkins-03.ahrq.local` | `dietrich.gottfriedsc@ahrq.local` | `ahrqgovjenkins.deploy@ahrq.local` | Environment variables (no profiles) |
+| Environment | Bastion Host | Username | Deployment User |
+|-------------|-------------|----------|-----------------|
+| AHRQ | `ahrq-jenkins-03.ahrq.local` | `dietrich.gottfriedsc@ahrq.local` | `ahrqgovjenkins.deploy@ahrq.local` |
 
-**Bastion Host SSM Workflow:**
-1. SSH to bastion: `ssh dietrich.gottfriedsc@ahrq.local@ahrq-jenkins-03.ahrq.local`
-2. Elevate to deployment user: `sudo su - ahrqgovjenkins.deploy@ahrq.local`
-3. Set AWS credentials as environment variables (obtained from Kion or credential vault)
-4. Use `aws ssm start-session` with `--region` to reach instances
-5. Execute commands via SSM just as you would locally
+---
 
+## Method 3: Jenkins Proxy (Last Resort)
 
+Use when both direct SSM and bastion are unavailable.
 
-## Usage Patterns
+Trigger a Jenkins job that executes SSM commands as part of a pipeline step. This is the original method used before direct SSM permissions were granted.
 
-### Pattern 1: Run a Simple Command
+> **Note:** This method is deprecated in favor of direct SSM. Use only as last resort.
 
-```bash
-aws ssm start-session --target <INSTANCE_ID> \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['<YOUR_COMMAND>']" \
-  --region <REGION> \
-  --profile <PROFILE_NAME>
-```
+---
 
-**Example:** Run `docker ps` on a remote instance
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker ps --format \"table {{.Names}}\t{{.Image}}\"']" \
-  --region us-east-1 \
-  --profile 225577488556_ct-pso-dev-role
-```
+## Drush Command Reference
 
-### Pattern 2: Execute Container Command (Drush, etc.)
+All Drush commands use SendCommand with this pattern:
 
 ```bash
-aws ssm start-session --target <INSTANCE_ID> \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec <CONTAINER_NAME> <COMMAND>']" \
-  --region <REGION> \
-  --profile <PROFILE_NAME>
+CMD_ID=$(aws ssm send-command \
+  --profile <PROFILE> --region us-east-1 \
+  --document-name "AWS-RunShellScript" \
+  --instance-ids "<INSTANCE_ID>" \
+  --parameters 'commands=["sudo docker exec <CONTAINER> drush <DRUSH_CMD>"]' \
+  --query 'Command.CommandId' --output text)
+
+sleep 5
+
+aws ssm get-command-invocation \
+  --profile <PROFILE> --region us-east-1 \
+  --command-id "$CMD_ID" --instance-id "<INSTANCE_ID>" \
+  --query '[Status,StandardOutputContent]' --output text
 ```
-
-**Example:** Run drush config:get on pso-drupal-web container
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush config:get <CONFIG_KEY>']" \
-  --region us-east-1 \
-  --profile 225577488556_ct-pso-dev-role
-```
-
-### Pattern 3: List Running Containers
-
-```bash
-aws ssm start-session --target <INSTANCE_ID> \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker ps --format \"table {{.Names}}\t{{.Image}}\"']" \
-  --region <REGION> \
-  --profile <PROFILE_NAME>
-```
-
-### Pattern 4: View Logs from Container
-
-```bash
-aws ssm start-session --target <INSTANCE_ID> \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker logs <CONTAINER_NAME> --tail 50']" \
-  --region <REGION> \
-  --profile <PROFILE_NAME>
-```
-
-### Pattern 5: Complex Commands with Bash
-
-For commands with pipes, conditionals, or complex logic, wrap in bash:
-
-```bash
-aws ssm start-session --target <INSTANCE_ID> \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec <CONTAINER> bash -c \"<COMMAND> | grep <FILTER>\"']" \
-  --region <REGION> \
-  --profile <PROFILE_NAME>
-```
-
-## Common Errors & Troubleshooting
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `EOF` at end of output | Session closed after command executed | Expected behavior; output is returned before disconnect |
-| `InstanceIds not in valid state` | Instance not in running state or IAM user lacks permissions | Check instance state with `ec2 describe-instances`; verify IAM permissions |
-| `Cannot perform start session` | Session manager plugin not installed | Install: `brew install session-manager-plugin` (macOS) or equivalent for your OS |
-| `permission denied while trying to connect to Docker daemon` | SSM user lacks Docker permissions | Use `sudo docker` instead of just `docker` |
-| `No such container` | Container name is incorrect | First run `sudo docker ps` to list actual container names |
-| `AccessDeniedException` for SSM | IAM role lacks `ssm:StartSession` permission | Add `ssm:StartSession` and `ssm:TerminateSession` to instance profile policy |
-
-## Output Parsing Tips
-
-SSM output includes session headers and footers. To extract just the command output:
-
-```bash
-aws ssm start-session ... 2>&1 | grep -v "Starting session" | grep -v "Cannot perform" | tail -n +2
-```
-
-Or pipe through `tail -<N>` to get the last N lines of output (before the `Cannot perform EOF` message).
-
-## Security Notes
-
-- SSM sessions are encrypted in transit
-- All commands are logged in CloudTrail (if enabled)
-- No SSH keys or firewall rule changes needed
-- Instance must have SSM agent running and IAM permissions
-- User must have `ssm:StartSession` permission in their IAM policy
-
-## PSO-Specific Configurations
-
-For PSO Drupal staging (account 225577488556):
-
-- **Instance ID:** `i-0a229c8ae49c2734f` (PSO Stage Auto Scaled Servers)
-- **Container name:** `pso-drupal-web` (not `pso-drupal`)
-- **Region:** `us-east-1`
-- **Profile:** `225577488556_ct-pso-dev-role` (Kion credentials)
-
-### Common PSO Commands
-
-**Check XML URL config:**
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush config:get <CONFIG_KEY>']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
-```
-
-**List all running containers:**
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker ps --format \"table {{.Names}}\t{{.Image}}\"']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
-```
-
-**Check Drupal status:**
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush status']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
-```
-
-## PSO Drush Command Reference
-
-All Drush commands on PSO use this wrapper:
-```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush <DRUSH_COMMAND>']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
-```
-
-Replace `<DRUSH_COMMAND>` with any of the following:
 
 | Task | Drush Command |
 |------|--------------|
@@ -293,33 +281,75 @@ Replace `<DRUSH_COMMAND>` with any of the following:
 | Import config | `cim -y` |
 | Export config | `cex -y` |
 | Run DB updates | `updb -y` |
-| One-time login link | `uli` |
+| One-time login | `uli` |
 | Drupal status | `status` |
-| List modules | `pm:list --status=enabled` |
-| Enable module | `en <module_name> -y` |
-| Disable module | `pmu <module_name> -y` |
+| List enabled modules | `pm:list --status=enabled` |
+| Enable module | `en <module> -y` |
+| Disable module | `pmu <module> -y` |
 | View recent logs | `watchdog:show --count=50` |
-| Get a config value | `config:get <config_key>` |
-| Set a config value | `config:set <config_key> <value> -y` |
+| Get config value | `config:get <key>` |
+| Set config value | `config:set <key> <value> -y` |
 | SQL dump | `sql-dump > /tmp/backup.sql` |
 | SQL query | `sql-query "SELECT * FROM node LIMIT 5"` |
 | User login by UID | `user:login --uid=1` |
 | List users | `sql-query "SELECT uid,name,mail FROM users_field_data LIMIT 20"` |
-| Queue worker run | `queue:run <queue_name>` |
+| Queue worker | `queue:run <queue_name>` |
 | Cron run | `cron` |
 
-**Full example — cache rebuild:**
+---
+
+## Instance Discovery (Dynamic)
+
+Auto Scaled instances change IDs. Always discover current instances first:
+
 ```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush cr']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
+# List all managed instances for a project
+aws ssm describe-instance-information \
+  --profile <PROFILE> --region us-east-1 \
+  --query 'InstanceInformationList[*].[InstanceId,ComputerName,PingStatus,IPAddress]' \
+  --output table
+
+# Get Name tags for discovered instances
+aws ec2 describe-instances \
+  --profile <PROFILE> --region us-east-1 \
+  --instance-ids <ID1> <ID2> \
+  --query 'Reservations[*].Instances[*].[InstanceId,Tags[?Key==`Name`].Value|[0],State.Name]' \
+  --output table
 ```
 
-**Full example — config import:**
+---
+
+## Common Errors & Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `ExpiredTokenException` | STS credentials expired | Refresh via Kion SSO portal, paste new creds in `~/.aws/credentials` |
+| `AccessDeniedException` on `SendCommand` + `document/AWS-RunShellScript` | Role missing SSM document resource | Add `arn:aws:ssm:us-east-1::document/AWS-RunShellScript` to IAM policy |
+| `AccessDeniedException` on `SendCommand` + `instance/` | Role missing EC2 instance resource | Add `arn:aws:ec2:us-east-1:ACCOUNT:instance/*` to IAM policy |
+| `EOF` at end of StartSession output | Session closed after command executed | Expected behavior — output is returned before disconnect |
+| `InstanceIds not in valid state` | Instance not running or SSM agent down | Check instance state: `ec2 describe-instances` |
+| `Cannot perform start session` | Session Manager plugin not installed | Install: `brew install session-manager-plugin` |
+| `permission denied ... Docker daemon` | SSM user lacks Docker access | Use `sudo docker` instead of `docker` |
+| `No such container` | Wrong container name | Run `sudo docker ps` first to get actual names |
+| `InvocationDoesNotExist` | Command still in progress or wrong CommandId | Wait longer, then retry `get-command-invocation` |
+
+## Output Parsing Tips
+
+**SendCommand output** (preferred — clean JSON):
 ```bash
-aws ssm start-session --target i-0a229c8ae49c2734f \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters "command=['sudo docker exec pso-drupal-web drush cim -y']" \
-  --region us-east-1 --profile 225577488556_ct-pso-dev-role
+aws ssm get-command-invocation ... --query 'StandardOutputContent' --output text
 ```
+
+**StartSession output** (has session headers/footers):
+```bash
+aws ssm start-session ... 2>&1 | grep -v "Starting session" | grep -v "Cannot perform" | tail -n +2
+```
+
+## Security Notes
+
+- SSM sessions are encrypted in transit
+- All commands are logged in CloudTrail
+- No SSH keys or firewall rules needed for direct SSM
+- Instance must have SSM agent running and IAM instance profile
+- User must have SSM permissions (all 7 verified as of 2026-09-04)
+- `SendCommand` is preferred over `StartSession` for automation — it produces auditable, retrievable output
