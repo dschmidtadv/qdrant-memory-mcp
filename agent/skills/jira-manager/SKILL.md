@@ -304,8 +304,10 @@ Available templates:
 
 ### Step 3: Get Issue Details
 
+#### Basic Usage
+
 ```bash
-python3 skills/jira-manager/scripts/jira_client.py get AQD-123
+jira get AQD-123
 ```
 
 Output:
@@ -315,6 +317,70 @@ Summary: Database connection pool exhaustion
 Status: Open
 Priority: High
 Assignee: Unassigned
+Reporter: Unknown
+```
+
+#### Retrieve Full Ticket Context (Comments, Description, Attachments)
+
+**Fetch all comments with automatic pagination:**
+```bash
+jira get AQD-9479 --include-comments --include-description
+```
+
+**Output includes:**
+- Full ticket description
+- All comments (auto-paginated)
+- Author names and timestamps
+- Comment preview (150 chars, truncation indicator if more exist)
+
+**Fetch with attachment metadata:**
+```bash
+jira get AQD-9479 --include-comments --include-description --include-attachments
+```
+
+**Attachment output shows:**
+- File icon (🖼️ for images, 📄 for docs, 📕 for PDFs, 🎥 for videos, etc.)
+- Filename, size, MIME type, author, upload timestamp
+- Download URL and thumbnail URL (for images)
+
+#### Available Flags
+
+| Flag | Effect | Default | Max |
+|------|--------|---------|-----|
+| `--include-description` | Include full issue description from API | off | — |
+| `--include-comments` | Fetch and display all comments | off | — |
+| `--include-attachments` | Include file metadata (URLs, sizes, MIME types) | off | — |
+| `--comment-limit N` | Total comments to retrieve (auto-paginated) | 50 | 100 per-request, unlimited total |
+| `--json` | Output raw JSON (includes `_comments`, `_description`, `_attachments` keys) | off | — |
+
+#### Use Cases
+
+**Infrastructure ticket investigation:**
+```bash
+jira get AQD-9479 --include-comments --include-description --json > ticket.json
+# Extract all remediation notes and full context
+```
+
+**Root cause analysis:**
+```bash
+jira get ADO-337 --include-comments | grep -A 2 "warm pool"
+# Search for specific decision rationale in comments
+```
+
+**Download screenshot from ticket:**
+```bash
+jira get AQD-9479 --include-attachments --json | jq -r '._attachments[0].download_url' | xargs curl -O
+```
+
+**List all images in ticket:**
+```bash
+jira get AQD-9479 --include-attachments --json | jq '._attachments[] | select(.mime_type | startswith("image/"))'
+```
+
+**Retrieve large number of comments:**
+```bash
+jira get AQD-9479 --include-comments --comment-limit 200
+# Automatically paginated in batches of up to 100 per request
 ```
 
 ### Step 4: Update Issues
