@@ -133,9 +133,112 @@ class JiraClient:
         
         return self._make_request("POST", "/issue", {"fields": fields})
     
-    def get_issue(self, issue_key: str) -> Dict:
-        """Get issue details"""
-        return self._make_request("GET", f"/issue/{issue_key}")
+    def get_issue(self, issue_key: str, include_description: bool = False,
+                  include_comments: bool = False, include_attachments: bool = False,
+                  comment_limit: int = 50) -> Dict:
+        """
+        Get issue details with optional description, comments, and attachments.
+        
+        Args:
+            issue_key: Issue key (e.g., "AQD-123")
+            include_description: Include full issue description (default: False)
+            include_comments: Include all ticket comments (default: False)
+            include_attachments: Include metadata for all attached files (default: False)
+            comment_limit: Max comments to retrieve (default: 50, max: 100)
+        
+        Returns:
+            Issue dict with optional '_description', '_comments', '_attachments' keys
+        """
+        issue = self._make_request("GET", f"/issue/{issue_key}")
+        
+        # Extract description if requested (it's already in the response)
+        if include_description:
+            description = issue.get("fields", {}).get("description")
+            if description:
+                issue["_description"] = description
+        
+        # Fetch comments if requested
+        if include_comments:
+            try:
+                comments, total, truncated = self.get_all_comments(issue_key, limit=comment_limit)
+                issue["_comments"] = comments
+                issue["_comment_count"] = total
+                issue["_truncated"] = truncated
+            except Exception as e:
+                issue["_comments"] = []
+                issue["_comment_error"] = str(e)
+        
+        # Extract attachments if requested (already in response)
+        if include_attachments:
+            attachments = issue.get("fields", {}).get("attachment", [])
+            if attachments:
+                issue["_attachments"] = [
+                    {
+                        "id": att.get("id"),
+                        "filename": att.get("filename"),
+                        "size_bytes": att.get("size"),
+                        "mime_type": att.get("mimeType"),
+                        "created": att.get("created"),
+                        "author": att.get("author", {}).get("displayName") or att.get("author", {}).get("name"),
+                        "download_url": att.get("content"),
+                        "thumbnail_url": att.get("thumbnail")
+                    }
+                    for att in attachments
+                ]
+                issue["_attachment_count"] = len(attachments)
+            else:
+                issue["_attachments"] = []
+                issue["_attachment_count"] = 0
+        
+        return issue
+    
+    def get_comments(self, issue_key: str, max_results: int = 50, start_at: int = 0) -> Dict:
+        """
+        Fetch comments for an issue with pagination support.
+        
+        Args:
+            issue_key: Issue key (e.g., "AQD-479")
+            max_results: Max comments per request (default: 50, max: 100)
+            start_at: Pagination offset (default: 0)
+        
+        Returns:
+            Dict with 'comments', 'total', 'startAt', 'maxResults' keys
+        """
+        params = {
+            "maxResults": min(max_results, 100),  # Jira API max is 100
+            "startAt": start_at
+        }
+        return self._make_request("GET", f"/issue/{issue_key}/comment", params=params)
+    
+    def get_all_comments(self, issue_key: str, limit: int = 50) -> tuple:
+        """
+        Fetch all comments up to `limit` with automatic pagination.
+        
+        Args:
+            issue_key: Issue key (e.g., "AQD-479")
+            limit: Total number of comments to retrieve (default: 50)
+        
+        Returns:
+            Tuple of (comments: List[Dict], total: int, truncated: bool)
+        """
+        all_comments = []
+        start_at = 0
+        batch_size = min(limit, 100)  # Max per Jira API request
+        total = 0
+
+        while True:
+            resp = self.get_comments(issue_key, max_results=batch_size, start_at=start_at)
+            batch = resp.get("comments", [])
+            all_comments.extend(batch)
+            total = resp.get("total", 0)
+            start_at += len(batch)
+
+            # Stop conditions: hit user limit, exhausted all comments, or empty page
+            if len(all_comments) >= limit or start_at >= total or not batch:
+                break
+
+        truncated = len(all_comments) < total
+        return all_comments[:limit], total, truncated
     
     def update_issue(
         self,
@@ -363,24 +466,49 @@ def cmd_create(args, config: JiraConfig) -> None:
 
 
 def cmd_get(args, config: JiraConfig) -> None:
-    """Get issue details"""
+    """Get issue details with optional comments, description, and attachments"""
     client = JiraClient(config)
-    result = client.get_issue(args.issue_key)
+    
+    # Validate comment-limit range
+    comment_limit = getattr(args, 'comment_limit', 50)
+    comment_limit = max(1, min(comment_limit, 100))  # Clamp to 1-100
+    
+    # Fetch issue with optional description/comments/attachments
+    result = client.get_issue(
+        args.issue_key,
+        include_description=getattr(args, 'include_description', False),
+        include_comments=getattr(args, 'include_comments', False),
+        include_attachments=getattr(args, 'include_attachments', False),
+        comment_limit=comment_limit
+    )
     
     if args.json:
         print(json.dumps(result, indent=2))
     else:
+        # TEXT OUTPUT FORMAT
         fields = result.get("fields", {})
+        
+        # Basic fields
         print(f"Key: {result['key']}")
         print(f"Summary: {fields.get('summary')}")
         print(f"Status: {fields.get('status', {}).get('name')}")
         print(f"Priority: {(fields.get('priority') or {}).get('name', 'None')}")
         print(f"Assignee: {(fields.get('assignee') or {}).get('displayName', 'Unassigned')}")
+        print(f"Reporter: {(fields.get('reporter') or {}).get('displayName', 'Unknown')}")
+        
+        # Story points (if present)
         story_points = fields.get('customfield_10106') or fields.get('story_points')
         if story_points is not None:
             print(f"Story Points: {story_points}")
         
-        # Show linked issues
+        # Description (if requested)
+        if getattr(args, 'include_description', False):
+            description = result.get("_description")
+            if description:
+                print(f"\nDescription:")
+                print(f"  {description[:200]}..." if len(description) > 200 else f"  {description}")
+        
+        # Links (if present)
         issue_links = result.get("fields", {}).get("issuelinks", [])
         if issue_links:
             print("\nLinks:")
@@ -396,6 +524,63 @@ def cmd_get(args, config: JiraConfig) -> None:
                 linked_key = linked_issue.get("key", "?")
                 linked_status = linked_issue.get("fields", {}).get("status", {}).get("name", "?")
                 print(f"  {link_direction} → {linked_key} ({linked_status})")
+        
+        # Comments (if requested)
+        if getattr(args, 'include_comments', False):
+            comments = result.get("_comments", [])
+            if comments:
+                print(f"\nComments ({len(comments)} total):")
+                for i, comment in enumerate(comments, 1):
+                    author = comment.get("author", {})
+                    author_name = author.get("displayName") or author.get("name") or "Unknown"
+                    created = comment.get("created", "Unknown")
+                    body = comment.get("body", "")
+                    
+                    # Truncate long comment bodies for readability
+                    body_preview = body[:150] + "..." if len(body) > 150 else body
+                    
+                    print(f"\n  [{i}] {author_name} ({created})")
+                    print(f"      {body_preview}")
+                
+                # Pagination indicator
+                if result.get("_truncated"):
+                    comment_count = result.get("_comment_count", "?")
+                    print(f"\n  ⚠️  Truncated (showing {len(comments)} of {comment_count} comments)")
+            else:
+                print("\nComments: None")
+        
+        # Attachments (if requested)
+        if getattr(args, 'include_attachments', False):
+            attachments = result.get("_attachments", [])
+            if attachments:
+                print(f"\nAttachments ({len(attachments)} total):")
+                for i, att in enumerate(attachments, 1):
+                    filename = att.get("filename", "unknown")
+                    size_kb = (att.get("size_bytes") or 0) / 1024
+                    mime_type = att.get("mime_type", "unknown")
+                    author = att.get("author", "Unknown")
+                    created = att.get("created", "Unknown")
+                    url = att.get("download_url", "")
+                    
+                    # Determine file type icon
+                    icon = "📄"
+                    if mime_type.startswith("image/"):
+                        icon = "🖼️"
+                    elif mime_type.startswith("video/"):
+                        icon = "🎥"
+                    elif mime_type.startswith("audio/"):
+                        icon = "🎵"
+                    elif "pdf" in mime_type:
+                        icon = "📕"
+                    elif "zip" in mime_type or "compressed" in mime_type:
+                        icon = "📦"
+                    
+                    print(f"\n  [{i}] {icon} {filename} ({size_kb:.1f} KB)")
+                    print(f"      Type: {mime_type}")
+                    print(f"      Uploaded: {created} by {author}")
+                    print(f"      URL: {url}")
+            else:
+                print("\nAttachments: None")
 
 
 def cmd_update(args, config: JiraConfig) -> None:
@@ -561,6 +746,27 @@ Cross-repo invocation (from a different repository):
     get_parser = subparsers.add_parser("get", help="Get issue details")
     get_parser.add_argument("issue_key", help="Issue key (e.g., AQD-123)")
     get_parser.add_argument("--json", action="store_true", help="Output JSON")
+    get_parser.add_argument(
+        "--include-description",
+        action="store_true",
+        help="Include full issue description from the API"
+    )
+    get_parser.add_argument(
+        "--include-comments",
+        action="store_true",
+        help="Include all ticket comments with timestamps and authors"
+    )
+    get_parser.add_argument(
+        "--include-attachments",
+        action="store_true",
+        help="Include metadata for all attached files (filenames, URLs, sizes)"
+    )
+    get_parser.add_argument(
+        "--comment-limit",
+        type=int,
+        default=50,
+        help="Total number of comments to retrieve (default: 50). Automatically paginated in batches of up to 100."
+    )
     
     # update command
     update_parser = subparsers.add_parser("update", help="Update an issue")
