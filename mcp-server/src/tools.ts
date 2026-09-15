@@ -164,7 +164,8 @@ export async function handleMemorizeContext(input: any): Promise<string> {
 }
 
 export async function handleRecallContext(input: any): Promise<string> {
-  const { query, project, limit = 5, tags } = input;
+  const { query, project, limit: rawLimit = 5, tags } = input;
+  const limit = Number(rawLimit);
 
   // Validate input before using values in metric labels/timers
   if (typeof query !== 'string' || query.trim().length === 0) {

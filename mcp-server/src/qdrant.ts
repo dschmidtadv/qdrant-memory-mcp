@@ -114,7 +114,7 @@ export async function searchVectors(
       `${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,
       {
         vector: query,
-        limit,
+        limit: Number(limit),
         filter,
         with_payload: true
       },
