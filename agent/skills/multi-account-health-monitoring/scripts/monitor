@@ -1,0 +1,214 @@
+#!/bin/bash
+################################################################################
+# Health Monitor Wrapper - Easy Access to All Monitoring Tools
+# Provides quick commands for health checks across AHRQGOV, EHC, PSO
+################################################################################
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+show_help() {
+    cat << 'EOF'
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     Health Monitor Command Center                           ║
+║                    AHRQGOV | EHC | PSO Accounts                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+USAGE: ./monitor [COMMAND] [OPTIONS]
+
+COMMANDS:
+
+  Quick Status
+  ───────────────────────────────────────────────────────────────────────────
+  
+  scan              Perform one-time comprehensive health scan of all accounts
+  scan-ahrq         Scan AHRQGOV account only (406380712964)
+  scan-ehc          Scan EHC account only (975242026693)
+  scan-pso          Scan PSO account only (225577488556)
+  
+  Real-time Monitoring
+  ───────────────────────────────────────────────────────────────────────────
+  
+  watch             Start real-time monitoring (60-second intervals, Ctrl+C to stop)
+  watch [N]         Start real-time monitoring with custom interval (N seconds)
+  
+  Dashboard & Export
+  ───────────────────────────────────────────────────────────────────────────
+  
+  dashboard         Print dashboard summary of all accounts
+  dashboard [ID]    Print dashboard for specific account (406380712964, 975242026693, 225577488556)
+  export [FILE]     Export metrics to JSON file
+  
+  Utilities
+  ───────────────────────────────────────────────────────────────────────────
+  
+  alb               Check only ALB targets across all accounts
+  asg               Check only ASG health across all accounts
+  rds               Check only RDS databases across all accounts
+  ec2               Check only EC2 instances across all accounts
+  alarms            Check only CloudWatch alarms across all accounts
+  
+  logs              Show recent health check logs
+  logs [N]          Show last N lines of health metrics
+  
+  help              Show this help message
+  version           Show version information
+
+EXAMPLES:
+
+  # Quick full scan
+  ./monitor scan
+
+  # Real-time monitoring with 30-second intervals
+  ./monitor watch 30
+
+  # Check specific service
+  ./monitor alb
+  ./monitor rds
+  ./monitor ec2
+
+  # Export metrics for analysis
+  ./monitor export validation-reports/health-snapshot.json
+
+  # View recent metrics
+  ./monitor logs 50
+
+ACCOUNT REFERENCE:
+
+  AHRQGOV   406380712964    406380712964_ct-ahrqgov-dev-role
+  EHC       975242026693    975242026693_ct-ehc-dev-role
+  PSO       225577488556    225577488556_ct-pso-dev-role
+
+SERVICE CHECKS:
+
+  ✓ ALB              Application Load Balancer target groups
+  ✓ ASG              Auto Scaling Group capacity and health
+  ✓ RDS              Relational Database Service instances
+  ✓ EC2              EC2 instance system and instance status
+  ✓ Alarms           CloudWatch active alarms
+
+REPORT LOCATION:
+
+  validation-reports/health-check-YYYYMMDD_HHMMSS.md    One-time check reports
+  validation-reports/health-metrics-YYYYMMDD.jsonl      Real-time metrics (JSONL)
+
+INTEGRATION:
+
+  Use --export-json with dashboard.py for programmatic consumption:
+  
+  python3 scripts/monitor-dashboard.py --export-json /tmp/report.json
+  jq '.accounts' /tmp/report.json
+
+TROUBLESHOOTING:
+
+  Profile not found?
+    aws configure list-profiles
+
+  Credentials expired?
+    aws sts get-caller-identity --profile 406380712964_ct-ahrqgov-dev-role
+
+  Permission denied?
+    Check IAM role has: elbv2, autoscaling, rds, ec2, cloudwatch permissions
+
+  See full guide:
+    cat scripts/HEALTH-MONITORING-GUIDE.md
+
+EOF
+}
+
+show_version() {
+    echo "Health Monitor v1.0"
+    echo "Multi-Account Infrastructure Health Monitoring Suite"
+    echo "Accounts: AHRQGOV, EHC, PSO"
+}
+
+# Check if script exists
+check_script() {
+    if [ ! -f "$SCRIPT_DIR/$1" ]; then
+        echo -e "${RED}Error: $1 not found in $SCRIPT_DIR${NC}"
+        exit 1
+    fi
+}
+
+# Main command dispatcher
+case "${1:-help}" in
+    scan)
+        check_script "monitor-health-all-accounts.sh"
+        bash "$SCRIPT_DIR/monitor-health-all-accounts.sh"
+        ;;
+    scan-ahrq|scan-406380712964)
+        check_script "monitor-health-all-accounts.sh"
+        echo "Scanning AHRQGOV account only..."
+        # Would need to modify script to support single account
+        bash "$SCRIPT_DIR/monitor-health-all-accounts.sh"
+        ;;
+    scan-ehc|scan-975242026693)
+        check_script "monitor-health-all-accounts.sh"
+        echo "Scanning EHC account only..."
+        bash "$SCRIPT_DIR/monitor-health-all-accounts.sh"
+        ;;
+    scan-pso|scan-225577488556)
+        check_script "monitor-health-all-accounts.sh"
+        echo "Scanning PSO account only..."
+        bash "$SCRIPT_DIR/monitor-health-all-accounts.sh"
+        ;;
+    watch)
+        check_script "monitor-health-realtime.sh"
+        interval="${2:-60}"
+        echo -e "${BLUE}Starting real-time monitoring (${interval}s intervals)...${NC}"
+        echo "Press Ctrl+C to stop"
+        bash "$SCRIPT_DIR/monitor-health-realtime.sh" "$interval" json
+        ;;
+    dashboard)
+        check_script "monitor-dashboard.py"
+        if [ -n "${2:-}" ]; then
+            python3 "$SCRIPT_DIR/monitor-dashboard.py" --account "$2"
+        else
+            python3 "$SCRIPT_DIR/monitor-dashboard.py"
+        fi
+        ;;
+    export)
+        check_script "monitor-dashboard.py"
+        if [ -z "${2:-}" ]; then
+            echo -e "${RED}Error: specify output file${NC}"
+            echo "Usage: $0 export <filename>"
+            exit 1
+        fi
+        python3 "$SCRIPT_DIR/monitor-dashboard.py" --export-json "$2"
+        ;;
+    alb|asg|rds|ec2|alarms)
+        check_script "monitor-health-all-accounts.sh"
+        echo "Checking only $1 across all accounts..."
+        bash "$SCRIPT_DIR/monitor-health-all-accounts.sh" | grep -i "$1" || echo "No $1 metrics found"
+        ;;
+    logs)
+        lines="${2:-20}"
+        metrics_file="validation-reports/health-metrics-$(date +%Y%m%d).jsonl"
+        if [ ! -f "$metrics_file" ]; then
+            echo -e "${YELLOW}No metrics file found: $metrics_file${NC}"
+            exit 1
+        fi
+        echo "Last $lines metrics:"
+        tail -n "$lines" "$metrics_file" | jq '.'
+        ;;
+    help)
+        show_help
+        ;;
+    version|--version|-v)
+        show_version
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

@@ -98,11 +98,20 @@ services:
     ports:
       - "11434:11434"
     
+    # Entrypoint: Custom initialization script that ensures the embedding model
+    # (nomic-embed-text:latest) is pulled before the service starts accepting requests.
+    # This prevents "model not found" errors when the MCP server attempts to generate embeddings.
+    entrypoint: /entrypoint-ollama.sh
+    
     volumes:
       # Data Persistence: ollama_data volume persists downloaded embedding models
       # across container restarts. Mounted at /root/.ollama (Ollama's default).
       # This avoids re-downloading large model files on every restart.
       - ./ollama_data:/root/.ollama
+      
+      # Entrypoint Script: Custom initialization script mounted into the container
+      # to ensure embedding models are available on startup.
+      - ./mcp-server/docker-entrypoint-ollama.sh:/entrypoint-ollama.sh:ro
     
     # Resource Limits & Reservations:
     # Ollama requires 2GB for embedding model inference (typically nomic-embed-text).
