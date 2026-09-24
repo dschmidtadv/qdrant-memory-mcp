@@ -15,7 +15,7 @@ curl -H "Authorization: Bearer $JIRA_PAT" \
   https://your-jira-instance/rest/api/2/field | jq '.[] | select(.custom==true)'
 ```
 
-## Custom Fields (cmext.ahrq.gov - CLOUD Project)
+## Custom Fields (example — your field IDs will differ)
 
 ### Linking Fields (Discovered)
 
