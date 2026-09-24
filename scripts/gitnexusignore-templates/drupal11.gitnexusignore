@@ -1,14 +1,12 @@
-# GitNexus ignore rules - standard template for AHRQ Drupal 11 repos
+# GitNexus ignore rules - standard template for large Drupal 11 repos
 # Drupal core + contrib + vendor account for the large majority of PHP files
 # in these repos (10,000-11,000+ files in core alone) and are what push
 # GitNexus's call-graph resolution into OOM/hang territory on a full index.
 # Custom code (the part actually worth indexing) is a small fraction of the
 # total file count. Exclude core/contrib/vendor and index custom code only.
 #
-# Verified against (2026-08-18):
-#   pso-drupal:     core 11,248 / contrib 3,185 / vendor 12,302 / custom 70
-#   ahrqgov-drupal:  core 10,226 / contrib 3,974 / vendor 14,282 / custom 114
-#   ehc-drupal:      core 10,192 / contrib 4,301 / vendor 8,075  / custom 130
+# Typical breakdown for a mid-size Drupal 11 site: core ~10,000-11,000 files,
+# contrib ~3,000-4,000, vendor ~8,000-14,000, custom code often under 150.
 # Adjust paths below if a repo's directory layout differs (check html/web/
 # vs a different docroot name before assuming this applies as-is).
 

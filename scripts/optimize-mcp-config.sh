@@ -65,7 +65,7 @@ upstreams = upstreams.map(upstream => {
         'awslabs.cloudwatch-mcp-server'
       ],
       env: {
-        AWS_PROFILE: '992382548059_ct-ahrqgov-dev-role',
+        AWS_PROFILE: process.env.AWS_PROFILE || 'your-aws-profile',
         AWS_REGION: 'us-east-1',
         FASTMCP_LOG_LEVEL: 'ERROR'
       }
@@ -81,7 +81,7 @@ upstreams = upstreams.map(upstream => {
         'awslabs.aws-documentation-mcp-server'
       ],
       env: {
-        AWS_PROFILE: '992382548059_ct-ahrqgov-dev-role',
+        AWS_PROFILE: process.env.AWS_PROFILE || 'your-aws-profile',
         AWS_REGION: 'us-east-1',
         FASTMCP_LOG_LEVEL: 'ERROR'
       }
@@ -97,7 +97,7 @@ upstreams = upstreams.map(upstream => {
         'awslabs.iam-mcp-server'
       ],
       env: {
-        AWS_PROFILE: '992382548059_ct-ahrqgov-dev-role',
+        AWS_PROFILE: process.env.AWS_PROFILE || 'your-aws-profile',
         AWS_REGION: 'us-east-1',
         FASTMCP_LOG_LEVEL: 'ERROR'
       }
