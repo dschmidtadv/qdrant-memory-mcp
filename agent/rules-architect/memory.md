@@ -81,12 +81,12 @@ Before returning command text, self-check and remove hidden characters.
 ## CROSS-PROJECT INITIALIZATION (UGIP Phase 4 Enhancement)
 
 ### When to Use
-When working on a project with infrastructure dependencies (e.g., `ahrq:drupal:ahrqgov`).
+When working on a project with infrastructure dependencies (e.g., `acme:drupal:acmesite`).
 
 ### Automatic Execution
 At UGIP Phase 4 initialization, after the standard mode-specific query:
 
-1. Extract ORG from PROJECT_NAME: `ahrq:drupal:ahrqgov` → `ORG = ahrq`
+1. Extract ORG from PROJECT_NAME: `acme:drupal:acmesite` → `ORG = acme`
 2. Query shared:registry: `recall_context(project="shared:registry", query="${ORG} relationship map")`
 3. Query infrastructure dependencies:
    - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`

@@ -32,7 +32,7 @@ Enable programmatic management of JIRA tickets and projects through a **CLI-firs
 
 ```bash
 # .env file
-JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
+JIRA_INSTANCE_URL=https://your-jira-instance.example.com/jira
 JIRA_PAT=<your-personal-access-token>
 JIRA_PROJECT_KEY=CLOUD
 ```
@@ -256,7 +256,7 @@ jira --project ADO check
 **Success output:**
 ```
 ✅ JIRA connectivity OK
-Instance: https://cmext.ahrq.gov/jira
+Instance: https://your-jira-instance.example.com/jira
 Project: ADO
 ```
 
@@ -265,7 +265,7 @@ Project: ADO
 ❌ Authentication failed. Check JIRA_PAT.
 → ACTION: Verify .env contains valid JIRA_PAT. Rotate token if expired.
 
-❌ Connection refused: https://cmext.ahrq.gov/jira
+❌ Connection refused: https://your-jira-instance.example.com/jira
 → ACTION: Verify JIRA_INSTANCE_URL. Check network/VPN connectivity.
 
 ❌ Project 'XYZ' not found.
@@ -663,7 +663,7 @@ python3 skills/jira-manager/scripts/jira_client.py get AQD-9999
 
 ```bash
 # .env file (in project root)
-JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
+JIRA_INSTANCE_URL=https://your-jira-instance.example.com/jira
 JIRA_PAT=<your-personal-access-token>
 JIRA_PROJECT_KEY=AQD
 ```
@@ -888,10 +888,10 @@ Example output:
 ## Release Deployment 202604.01
 
 ### Features
-- [EHCD-3293](https://cmext.ahrq.gov/jira/browse/EHCD-3293): Implement GitHub Release automation
+- [EHCD-3293](https://your-jira-instance.example.com/jira/browse/EHCD-3293): Implement GitHub Release automation
 
 ### Bug Fixes
-- [EHCD-3084](https://cmext.ahrq.gov/jira/browse/EHCD-3084): Search pages not cached
+- [EHCD-3084](https://your-jira-instance.example.com/jira/browse/EHCD-3084): Search pages not cached
 
 **Total Issues:** 31
 **Release Date:** 2026-05-18
@@ -988,7 +988,7 @@ python3 /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/agent/skills/jira
 
 ```bash
 # qdrant-memory-mcp/.env  (shared — never committed)
-JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
+JIRA_INSTANCE_URL=https://your-jira-instance.example.com/jira
 JIRA_PAT=<your-personal-access-token>
 
 # <caller-repo>/.env  (per-project — never committed)

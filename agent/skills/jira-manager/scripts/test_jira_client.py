@@ -17,7 +17,7 @@ class TestJiraClientComments(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.config = Mock(spec=JiraConfig)
-        self.config.instance_url = "https://cmext.ahrq.gov/jira"
+        self.config.instance_url = "https://your-jira-instance.example.com/jira"
         self.config.pat = "test-pat"
         self.config.project_key = "TEST"
         self.config.get_headers = Mock(return_value={"Authorization": "Bearer test-pat"})
@@ -208,8 +208,8 @@ class TestJiraClientComments(unittest.TestCase):
                         "mimeType": "image/png",
                         "created": "2026-09-09T12:00:00-0400",
                         "author": {"displayName": "User One", "name": "user1"},
-                        "content": "https://cmext.ahrq.gov/jira/secure/attachment/10000/screenshot.png",
-                        "thumbnail": "https://cmext.ahrq.gov/jira/secure/thumbnail/10000/screenshot.png"
+                        "content": "https://your-jira-instance.example.com/jira/secure/attachment/10000/screenshot.png",
+                        "thumbnail": "https://your-jira-instance.example.com/jira/secure/thumbnail/10000/screenshot.png"
                     }
                 ]
             }
@@ -279,7 +279,7 @@ class TestJiraClientErrorHandling(unittest.TestCase):
     
     def setUp(self):
         self.config = Mock(spec=JiraConfig)
-        self.config.instance_url = "https://cmext.ahrq.gov/jira"
+        self.config.instance_url = "https://your-jira-instance.example.com/jira"
         self.config.get_headers = Mock(return_value={})
         self.config.ssl_context = Mock()
         self.client = JiraClient(self.config)

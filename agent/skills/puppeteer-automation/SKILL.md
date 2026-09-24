@@ -23,14 +23,13 @@ triggers:
   - PDF generation
   - data extraction
 version: 1.0.0
-author: AHRQ Development Team
 created: 2026-03-18
 updated: 2026-03-18
 ---
 
 # Puppeteer Automation Skill
 
-This skill provides comprehensive Puppeteer automation capabilities based on patterns identified in the AHRQ project. It includes standardized browser configurations, common test utilities, and production-ready patterns for web automation tasks.
+This skill provides comprehensive Puppeteer automation capabilities. It includes standardized browser configurations, common test utilities, and production-ready patterns for web automation tasks.
 
 ## When to Use This Skill
 
@@ -273,13 +272,13 @@ Configure your `.env` file:
 
 ```bash
 # Base URL for testing
-BASE_URL=https://www.ahrq.gov
+BASE_URL=https://example.com
 
 # Puppeteer settings
 PUPPETEER_TIMEOUT=30000
 PUPPETEER_EXECUTABLE_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 
-# AHRQ-specific settings
+# WAF bypass (optional, only needed if testing behind a WAF)
 WAF_BYPASS_TOKEN=your-waf-bypass-token-here
 
 # Test configuration
@@ -293,7 +292,7 @@ DEBUG_SCREENSHOTS=false
 The skill automatically handles:
 
 - **Cross-platform browser detection** (macOS, Linux, Windows)
-- **WAF bypass headers** for AHRQ production testing
+- **WAF bypass headers** for testing behind a web application firewall
 - **Resource blocking** for faster test execution
 - **Modern User-Agent strings** to avoid bot detection
 - **Viewport presets** (desktop1, desktop2, tablet, mobile)
@@ -423,15 +422,15 @@ CMD ["npm", "test"]
 
 ## Security Considerations
 
-### WAF Bypass (AHRQ Specific)
+### WAF Bypass
 
-For AHRQ production testing, the skill includes WAF bypass functionality:
+For production testing behind a WAF, the skill includes WAF bypass functionality:
 
 ```javascript
 // Automatically added to requests when WAF_BYPASS_TOKEN is set
 headers: {
   'X-WAF-Bypass': process.env.WAF_BYPASS_TOKEN,
-  'User-Agent': 'Mozilla/5.0 (compatible; AHRQ-Testing/1.0)'
+  'User-Agent': 'Mozilla/5.0 (compatible; PuppeteerAutomation/1.0)'
 }
 ```
 
@@ -495,7 +494,7 @@ console.log('Memory usage:', metrics.JSHeapUsedSize);
    export PUPPETEER_TIMEOUT=60000
    ```
 
-3. **WAF blocking (AHRQ):**
+3. **WAF blocking:**
    ```bash
    export WAF_BYPASS_TOKEN=your-token-here
    ```
@@ -556,9 +555,9 @@ For issues specific to this skill:
 
 ## Version History
 
-- **v1.0.0** (2026-03-18): Initial release based on AHRQ project patterns
+- **v1.0.0** (2026-03-18): Initial release
   - Cross-browser testing support
-  - AHRQ-specific WAF bypass functionality
+  - WAF bypass functionality
   - Responsive design testing utilities
   - Performance monitoring capabilities
   - Comprehensive error handling and debugging tools

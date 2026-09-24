@@ -26,7 +26,7 @@ Content-Type: text/markdown
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="project"
 
-ahrqgov-drupal
+example-project
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="timestamp"
 
@@ -57,7 +57,7 @@ with open(file_path, 'rb') as f:
         'file': (file_path.name, f, 'text/markdown'),
     }
     data = {
-        'project': 'ahrqgov-drupal',
+        'project': 'example-project',
         'timestamp': '2026-04-17T16:00:00Z',
     }
     response = requests.post(
@@ -74,7 +74,7 @@ with open(file_path, 'rb') as f:
 ```bash
 curl -X POST http://127.0.0.1:5000/api/handoff \
   -F "file=@document.md" \
-  -F "project=ahrqgov-drupal" \
+  -F "project=example-project" \
   -F "timestamp=2026-04-17T16:00:00Z"
 ```
 
@@ -321,7 +321,7 @@ file_size = file_path.stat().st_size
 file_hash = compute_file_hash(file_path)
 
 data = {
-    'project': 'ahrqgov-drupal',
+    'project': 'example-project',
     'timestamp': datetime.utcnow().isoformat(),
     'filename': file_path.name,
     'file_size': file_size,
@@ -342,7 +342,7 @@ response = requests.post(endpoint, files=files, data=data)
   "status": "success",
   "message": "Document indexed",
   "document_id": "doc-12345",
-  "workspace": "ahrqgov-drupal",
+  "workspace": "example-project",
   "indexed_at": "2026-04-17T16:00:00Z"
 }
 ```

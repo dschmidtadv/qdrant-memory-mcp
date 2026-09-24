@@ -97,7 +97,7 @@ When writing code that depends on infrastructure or other projects (e.g., Drupal
 ### Automatic Execution
 At UGIP Phase 4 initialization, after the standard mode-specific query:
 
-1. Extract ORG from PROJECT_NAME: `ahrq:drupal:ahrqgov` → `ORG = ahrq`
+1. Extract ORG from PROJECT_NAME: `acme:drupal:acmesite` → `ORG = acme`
 2. Query shared:registry: `recall_context(project="shared:registry", query="${ORG} relationship map")`
 3. Query dependencies for code requirements:
    - `recall_context(project="${ORG}:infra:drupal-deploy", query="PHP version Docker image")`

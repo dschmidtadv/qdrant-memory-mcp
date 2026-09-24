@@ -15,7 +15,7 @@ This document catalogs common indexing endpoint patterns and their specification
 **Configuration:**
 ```yaml
 endpoint: http://127.0.0.1:5000/api/handoff
-workspace_slug: ahrqgov-drupal
+workspace_slug: example-project
 ```
 
 **Request Format:**
@@ -115,7 +115,7 @@ collection_name: agent-memory
 **Configuration:**
 ```yaml
 endpoint: http://elasticsearch:9200/_bulk
-index_name: ahrqgov-drupal-docs
+index_name: example-project-docs
 ```
 
 **Request Format:**
@@ -123,7 +123,7 @@ index_name: ahrqgov-drupal-docs
 POST /_bulk
 Content-Type: application/x-ndjson
 
-{ "index": { "_index": "ahrqgov-drupal-docs", "_id": "doc-1" } }
+{ "index": { "_index": "example-project-docs", "_id": "doc-1" } }
 { "title": "filename.md", "content": "...", "timestamp": "2026-04-17T..." }
 ```
 
@@ -135,7 +135,7 @@ Content-Type: application/x-ndjson
   "items": [
     {
       "index": {
-        "_index": "ahrqgov-drupal-docs",
+        "_index": "example-project-docs",
         "_id": "doc-1",
         "_version": 1,
         "result": "created"
@@ -162,7 +162,7 @@ Content-Type: application/x-ndjson
 **Configuration:**
 ```yaml
 endpoint: http://milvus:19530/v1/documents/insert
-collection_name: ahrqgov-drupal
+collection_name: example-project
 ```
 
 **Request Format:**
@@ -171,7 +171,7 @@ POST /v1/documents/insert
 Content-Type: application/json
 
 {
-  "collection_name": "ahrqgov-drupal",
+  "collection_name": "example-project",
   "records": [
     {
       "id": "doc-1",
@@ -215,7 +215,7 @@ Content-Type: application/json
 ```yaml
 endpoint: https://api.pinecone.io/v1/documents
 api_key: ${PINECONE_API_KEY}
-index_name: ahrqgov-drupal
+index_name: example-project
 ```
 
 **Request Format:**
@@ -232,7 +232,7 @@ Content-Type: application/json
       "metadata": {
         "filename": "file.md",
         "text": "Document content...",
-        "project": "ahrqgov-drupal"
+        "project": "example-project"
       }
     }
   ]
@@ -281,7 +281,7 @@ retry_max: 3
 
 ### Example 2: Legacy Local Development (Handoff Service)
 ```yaml
-project: ahrqgov-drupal
+project: example-project
 memory_dir: .ai-memory
 endpoint: http://127.0.0.1:5000/api/handoff
 concurrency: 3
@@ -290,11 +290,11 @@ retry_max: 3
 
 ### Example 3: Semantic Search (Pinecone)
 ```yaml
-project: ahrqgov-drupal
+project: example-project
 memory_dir: .ai-memory
 endpoint: https://api.pinecone.io/v1/documents
 api_key: ${PINECONE_API_KEY}
-index_name: ahrqgov-drupal
+index_name: example-project
 concurrency: 10
 retry_max: 3
 ```

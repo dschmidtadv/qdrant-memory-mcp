@@ -161,9 +161,9 @@ Metrics server listening on :9091
 ### API Gateway
 The agent communicates with the primary LLM via a CloudFront edge-shim using custom authentication headers.
 Configure via environment variables — see `agent/.env.example`:
-- `RIVA_API_ENDPOINT` — CloudFront edge-shim URL
-- `RIVA_APP_ID` — Application identifier (`x-app-id` header)
-- `RIVA_DEVELOPER_ID` — Developer identifier (`x-developer-id` header)
+- `LITELLM_API_ENDPOINT` — CloudFront edge-shim URL
+- `LITELLM_APP_ID` — Application identifier (`x-app-id` header)
+- `LITELLM_DEVELOPER_ID` — Developer identifier (`x-developer-id` header)
 
 ---
 
@@ -282,7 +282,7 @@ Configure via environment variables — see `agent/.env.example`:
 ## Next Phases
 
 ### Phase 4: Apply Migration to Other Projects
-Extend global rules and 3SV protocol to other projects (ahrqgov-drupal, pso-drupal, github-runner, etc.)
+Extend global rules and 3SV protocol to other projects
 
 ### Phase 5: Testing & Validation ✓
 Comprehensive testing of new architecture across all modes and projects

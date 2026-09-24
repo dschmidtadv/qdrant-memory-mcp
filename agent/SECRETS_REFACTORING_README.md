@@ -78,8 +78,8 @@ node config-loader.js > config-output.json
 ### LiteLLM Configuration
 - `LITELLM_BASE_URL` - Local LiteLLM proxy base URL
 - `LITELLM_API_KEY` - LiteLLM API key
-- `RIVA_LITELLM_BASE_URL` - RIVA-hosted LiteLLM base URL
-- `RIVA_LITELLM_API_KEY` - RIVA LiteLLM API key
+- `LITELLM_REMOTE_BASE_URL` - Remote/hosted LiteLLM base URL (if using a shared proxy instead of a local one)
+- `LITELLM_REMOTE_API_KEY` - Remote/hosted LiteLLM API key
 
 ### OpenAI Configuration
 - `OPENAI_BASE_URL` - Local OpenAI-compatible endpoint
@@ -89,7 +89,7 @@ node config-loader.js > config-output.json
 - `OPENAI_TEST_MODEL_ID` *(optional)* - Test model identifier; only needed for local test overrides
 
 ### Anthropic Configuration
-- `ANTHROPIC_BASE_URL` - RIVA-hosted Anthropic endpoint
+- `ANTHROPIC_BASE_URL` - Anthropic endpoint (override if routing through a proxy)
 
 ### Developer Information
 - `DEVELOPER_ID` *(optional)* - Developer identifier; not referenced by core configs

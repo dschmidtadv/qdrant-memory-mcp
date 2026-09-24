@@ -1,7 +1,6 @@
 /**
  * Test Utilities
  * Common test patterns and utilities for Puppeteer automation
- * Based on AHRQ project's puppeteer-utils.js patterns
  */
 
 const { expect } = require('chai');

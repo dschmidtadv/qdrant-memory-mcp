@@ -10,8 +10,8 @@ echo "Debug logging enabled: MCP_FLATTENER_DEBUG=1"
 echo ""
 
 export MCP_FLATTENER_DEBUG=1
-export AWS_PROFILE="992382548059_ct-ahrqgov-dev-role"
-export AWS_REGION="us-east-1"
+export AWS_PROFILE="${AWS_PROFILE:-your-aws-profile}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
 export FASTMCP_LOG_LEVEL="ERROR"
 
 # Run the flattener with timeout

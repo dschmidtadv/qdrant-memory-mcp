@@ -5,7 +5,7 @@
 ### Prerequisites
 
 1. **JIRA Instance Access**
-   - Jira Server/Data Center instance (e.g., https://cmext.ahrq.gov/jira)
+   - Jira Server/Data Center instance (e.g., https://your-jira-instance.example.com/jira)
    - Personal Access Token (PAT) with permissions to create/update issues
    - Project key (e.g., AQD)
 
@@ -17,7 +17,7 @@
    ```bash
    # Create .env file in project root
    cat > .env << 'EOF'
-   JIRA_INSTANCE_URL=https://cmext.ahrq.gov/jira
+   JIRA_INSTANCE_URL=https://your-jira-instance.example.com/jira
    JIRA_PAT=your-personal-access-token-here
    JIRA_PROJECT_KEY=AQD
    EOF
@@ -36,7 +36,7 @@ python3 -c "from jira_config import JiraConfig; c = JiraConfig(); print('✅ Con
 
 **Expected Output:**
 ```
-✅ Config loaded: {'instance_url': 'https://cmext.ahrq.gov/jira', 'project_key': 'AQD', 'pat': '***xxxx'}
+✅ Config loaded: {'instance_url': 'https://your-jira-instance.example.com/jira', 'project_key': 'AQD', 'pat': '***xxxx'}
 ```
 
 **Validation:**
@@ -52,7 +52,7 @@ python3 jira_client.py check
 **Expected Output:**
 ```
 ✅ JIRA connectivity OK
-Instance: https://cmext.ahrq.gov/jira
+Instance: https://your-jira-instance.example.com/jira
 Project: AQD
 ```
 

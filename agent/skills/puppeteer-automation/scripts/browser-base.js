@@ -1,16 +1,16 @@
 /**
  * Browser Base Configuration
- * Standardized Puppeteer browser setup for AHRQ project
- * Based on patterns from puppeteer/test/standard-functions.js and puppeteer-utils.js
+ * Standardized Puppeteer browser setup
  */
 
 const puppeteer = require('puppeteer');
 require('dotenv').config();
 
 // Environment configuration
-const BASE_URL = process.env.BASE_URL || 'https://www.ahrq.gov';
+const BASE_URL = process.env.BASE_URL || 'https://example.com';
 const PUPPETEER_TIMEOUT = parseInt(process.env.PUPPETEER_TIMEOUT) || 30000;
 const WAF_BYPASS_TOKEN = process.env.WAF_BYPASS_TOKEN;
+const WAF_BYPASS_HEADERS = (process.env.WAF_BYPASS_HEADERS || '').split(',').map(h => h.trim()).filter(Boolean);
 
 // Viewport configurations for responsive testing
 const VIEWPORTS = {
@@ -81,12 +81,14 @@ async function configurePage(page, viewportType = 'desktop1') {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   );
 
-  // WAF bypass headers for production AHRQ site
-  if (/^https:\/\/www\.ahrq\.gov\b/.test(BASE_URL) && WAF_BYPASS_TOKEN) {
-    await page.setExtraHTTPHeaders({
-      'aws-cf-cd-test': WAF_BYPASS_TOKEN,
-      'x-ahrq-cd-test': WAF_BYPASS_TOKEN
-    });
+  // WAF bypass headers, if configured (set WAF_BYPASS_TOKEN and
+  // WAF_BYPASS_HEADERS, a comma-separated list of header names your WAF expects)
+  if (WAF_BYPASS_TOKEN && WAF_BYPASS_HEADERS.length > 0) {
+    const headers = {};
+    for (const headerName of WAF_BYPASS_HEADERS) {
+      headers[headerName] = WAF_BYPASS_TOKEN;
+    }
+    await page.setExtraHTTPHeaders(headers);
   }
 
   // Set default timeout

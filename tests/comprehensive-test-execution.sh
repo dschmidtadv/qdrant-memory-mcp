@@ -26,7 +26,7 @@ OLLAMA_URL="http://localhost:11434"
 TEST_COLLECTION="agent-memory"
 VECTOR_DIMENSION=768
 TEST_PROJECT_1="qdrant-memory-mcp"
-TEST_PROJECT_2="ahrqgov-drupal"
+TEST_PROJECT_2="example-drupal-project"
 
 # Logging
 LOG_FILE=".ai-memory/TEST_EXECUTION_LOG_$(date +%Y%m%d_%H%M%S).txt"

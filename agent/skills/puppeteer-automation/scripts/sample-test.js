@@ -1,13 +1,12 @@
 /**
  * Sample Puppeteer Test
  * Demonstrates usage of the puppeteer-automation skill
- * Based on AHRQ project patterns
  */
 
 const { expect } = require('chai');
 const { testCase, testFormSubmission, testResponsive } = require('./test-utilities');
 
-describe('AHRQ Website Tests', function() {
+describe('Website Tests', function() {
   // Set timeout for all tests
   this.timeout(60000);
 
@@ -18,13 +17,13 @@ describe('AHRQ Website Tests', function() {
         expectations: async (page) => {
           // Check page title
           const title = await page.title();
-          expect(title).to.include('AHRQ');
-          
+          expect(title).to.include('Expected Title');
+
           // Check for main navigation
           await page.waitForSelector('.main-nav');
-          
-          // Check for AHRQ logo
-          const logo = await page.$('.ahrq-logo');
+
+          // Check for logo
+          const logo = await page.$('.site-logo');
           expect(logo).to.not.be.null;
           
           // Check for footer

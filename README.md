@@ -771,13 +771,12 @@ This enables seamless cross-project operation without hardcoded project names.
 
 ### Cross-Project Support
 
-The Three-Brain Architecture is deployed across 5 projects:
+The Three-Brain Architecture can be deployed across multiple projects, for example:
 
 1. **qdrant-memory-mcp** (Primary)
-2. **ahrqgov-drupal** (AHRQ Drupal Site)
-3. **pso-drupal** (PSO Drupal Site)
-4. **github-runner** (Infrastructure/DevOps)
-5. **starstruck-claude** (Drupal AI Build Agent)
+2. A Drupal site
+3. An infrastructure/DevOps repo
+4. A build agent or CI project
 
 All projects use the same global rules system and unified memory backend.
 
@@ -943,7 +942,6 @@ Zoo Code v3.80.x searches these directories (in order):
 | `aws-iam-analysis` | IAM security review and compliance assessment |
 | `aws-infrastructure` | Terraform & CLI management with .env-based profiles |
 | `aws-lambda-management` | Lambda deployment, management, and monitoring |
-| `aws-ssm-connection` | SSM Session Manager for EC2/container operations |
 | `gitnexus` | Code intelligence: call graphs, blast radius, refactoring |
 | `indexing-manager` | Push/sync .ai-memory files to Qdrant or vector stores |
 | `jira-manager` | JIRA ticket management via CLI and API |
