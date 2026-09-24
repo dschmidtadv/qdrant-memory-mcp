@@ -266,3 +266,54 @@ curl -s \
 - **Dependency:** [`aws-ssm-connection`](../aws-ssm-connection/SKILL.md) — SSM connectivity, instance discovery, profiles
 - **Tickets:** AQD-9432 (Cache Runbook), AQD-9452 (Redis isolation), AQD-9309 (Route cache)
 - **Verified:** 2026-09-04 — All cache clears, CloudFront invalidation, and post-invalidation verification tested against AHRQ production
+
+---
+
+## Slack Notification Template
+
+After cache flush completion, use this template to notify the requester in Slack:
+
+### Standard Completion Message
+
+```
+:white_check_mark: Cache flush complete for [PROJECT] [CONTENT_TYPE]
+
+**Drupal Cache:** Nodes [NODE_IDS] invalidated on [COUNT] prod instances via drush cache:tag
+**CloudFront:** Invalidation ID [INVALIDATION_ID] — paths revalidated in ~[TIME]min
+**Verification:** All content verified fresh from origin
+
+[Optional: Note any path corrections or issues discovered]
+```
+
+### Template with Substitutions
+
+```
+:white_check_mark: Cache flush complete for AHRQ CAHPS database pages and PDFs
+
+**Drupal Cache:** Nodes 238852 & 237720 invalidated on 3 prod instances via drush cache:tag
+**CloudFront:** Invalidation IDs I2SM02949QDHQ13BNK5WYRNRUV & I1IQTM6FJO9L54TFJJULIUEOSP — paths revalidated in ~2min
+**Verification:** All content verified fresh from origin (x-cache: Miss from cloudfront)
+
+:warning: Note: PDF paths in request contained extra `/data-research/` subdirectory. Corrected paths used: `/wysiwyg/cahps/cahps-database/cahps-data-research-abstract-form-*.pdf`
+```
+
+### Minimal Version (1 liner for chat)
+
+```
+:white_check_mark: [PROJECT] cache flush complete — [COUNT] nodes invalidated, CloudFront revalidated, all content verified fresh.
+```
+
+---
+
+## How to Generate the Message
+
+At task completion, gather:
+1. **PROJECT**: AHRQ, EHC, or PSO
+2. **CONTENT_TYPE**: "pages", "PDFs", "pages and PDFs", etc.
+3. **NODE_IDS**: e.g., `238852 & 237720`
+4. **COUNT**: Number of production instances (typically 3)
+5. **INVALIDATION_ID**: From CloudFront `create-invalidation` response
+6. **TIME**: Approximate wait time (1–5 minutes typical)
+7. **ISSUES**: Any path corrections, missing files, or anomalies discovered
+
+Paste the completed template directly into Slack.

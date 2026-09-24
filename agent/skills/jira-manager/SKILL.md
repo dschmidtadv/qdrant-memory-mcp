@@ -752,6 +752,42 @@ python3 jira_client.py update AQD-123 \
   --priority Critical
 ```
 
+#### `fix-versions` (REST API — CLI does not support this)
+
+`jira update` does **not** support `fixVersions`. Use the REST API directly via `jira_config.py` credentials.
+
+**Remove a fixVersion:**
+```python
+python3 -c "
+import sys, json, urllib.request, ssl
+sys.path.insert(0, '/Users/dietrichgottfriedschmidt/qdrant-memory-mcp/agent/skills/jira-manager/scripts')
+from jira_config import JiraConfig
+c = JiraConfig()
+ssl_ctx = ssl.create_default_context()
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+payload = json.dumps({'update': {'fixVersions': [{'remove': {'name': 'Deployment 202609.01'}}]}}).encode()
+url = f'{c.instance_url}/rest/api/2/issue/EHCD-XXXX'
+req = urllib.request.Request(url, data=payload, method='PUT')
+req.add_header('Authorization', f'Bearer {c.pat}')
+req.add_header('Content-Type', 'application/json')
+with urllib.request.urlopen(req, context=ssl_ctx) as r:
+    print(f'Status: {r.status}')  # 204 = success
+"
+```
+
+**Add a fixVersion:**
+```python
+payload = json.dumps({'update': {'fixVersions': [{'add': {'name': 'Deployment 202609.02'}}]}}).encode()
+```
+
+**Replace all fixVersions (full set):**
+```python
+payload = json.dumps({'fields': {'fixVersions': [{'name': 'Deployment 202609.02'}]}}).encode()
+```
+
+> HTTP 204 = success (no response body). Use `jira get <TICKET>` to verify.
+
 #### `comment`
 Add comment to issue.
 
