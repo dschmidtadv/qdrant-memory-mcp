@@ -44,9 +44,60 @@ Execute commands on AWS EC2 instances via AWS Systems Manager. Uses **direct SSM
 
 ### Staging Instances
 
+> **Note:** EHC and PSO staging ASGs are normally scaled to **0** when idle. You must wake them up before SSM will return any instances. See **EHC Staging Wake-Up** section below.
+
 | Project | Account | Profile | Instance ID | Name |
 |---------|---------|---------|-------------|------|
+| **EHC** | 975242026693 | `975242026693_ct-ehc-dev-role` | *(dynamic — discover after wake-up)* | EHC Stage Auto Scaled Servers |
 | **PSO** | 225577488556 | `225577488556_ct-pso-dev-role` | `i-0a229c8ae49c2734f` | PSO Stage Auto Scaled Servers |
+
+### EHC Staging Wake-Up (ASG scaled to zero)
+
+EHC staging (`EHC-Stage-ASG`) idles at desired=0. Before running any SSM commands on staging, invoke the wake-up Lambda:
+
+**Step 1 — Scale up via Lambda (required payload: `asg` key)**
+```bash
+aws lambda invoke \
+  --profile 975242026693_ct-ehc-dev-role \
+  --region us-east-1 \
+  --function-name stage-wakeup-handler \
+  --payload '{"asg": "EHC-Stage-ASG"}' \
+  --cli-binary-format raw-in-base64-out \
+  /tmp/ehc-wakeup.json && cat /tmp/ehc-wakeup.json
+```
+Expected: `{"status": "ok", "action": "scaled_up", "message": "...ready in ~9 minutes."}`
+
+> ⚠️ Calling with `{}` (empty payload) returns HTTP 400 `asg parameter required` — always pass the `asg` key.
+
+**Step 2 — Get the new instance ID from ASG**
+```bash
+aws autoscaling describe-auto-scaling-groups \
+  --profile 975242026693_ct-ehc-dev-role \
+  --region us-east-1 \
+  --auto-scaling-group-names EHC-Stage-ASG \
+  --query 'AutoScalingGroups[0].Instances[*].[InstanceId,LifecycleState,HealthStatus]' \
+  --output table
+```
+
+**Step 3 — Poll SSM until Online (~9 min)**
+```bash
+aws ssm describe-instance-information \
+  --profile 975242026693_ct-ehc-dev-role \
+  --region us-east-1 \
+  --filters "Key=InstanceIds,Values=<INSTANCE_ID>" \
+  --query 'InstanceInformationList[*].[InstanceId,PingStatus,IPAddress]' \
+  --output table
+```
+Poll every 60 seconds. Proceed when `PingStatus = Online`.
+
+### EHC ASG Inventory
+
+| ASG Name | Normal Desired | Purpose |
+|----------|---------------|---------|
+| `EHC-Prod-ASG` | 2 | Production live/green |
+| `EHC-Prod-Blue-ASG` | 0 | Production blue (deploy slot) |
+| `EHC-Stage-ASG` | 0 (idle) | **Staging live** — wake with Lambda |
+| `EHC-Stage-Blue-ASG` | 0 | Staging blue (deploy slot) |
 
 ### Container Names by Project
 
@@ -55,8 +106,10 @@ Execute commands on AWS EC2 instances via AWS Systems Manager. Uses **direct SSM
 | AHRQGOV | `ahrqgov-drupal-web` | Drupal web server |
 | EHC | `ehc-drupal-web` | Drupal web server |
 | PSO | `pso-drupal-web` | Drupal web server |
-
 > **Note:** Instance IDs for Auto Scaled instances change on scale events. Always run `ssm describe-instance-information` to discover current instances before targeting.
+
+> **CRITICAL — Nessus/Security scanning:** Nessus findings on EHC/AHRQ instances are **host-OS level (Ubuntu 22.04)**, NOT container level (the Docker image is Debian 11/bullseye). Always verify vulnerable packages on the **EC2 host directly** via SSM, not inside `docker exec`. Use `apt list --installed` on the host, and `curl -s http://169.254.169.254/latest/meta-data/ami-id` to confirm AMI. See EHCD-3388 for the verification pattern.
+
 
 ---
 
