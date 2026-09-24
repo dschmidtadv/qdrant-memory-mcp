@@ -1127,7 +1127,9 @@ ln -sf ~/.claude/skills ~/apps/new-project/.claude/skills
 
 ## License
 
-MIT License — See [LICENSE](LICENSE) file for details.
+Copyright (C) 2026 Dietrich Gottfried Schmidt
+
+GNU General Public License v3.0 — See [LICENSE](LICENSE) file for details.
 
 ---
 
