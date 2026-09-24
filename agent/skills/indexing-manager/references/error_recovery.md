@@ -53,14 +53,14 @@ python3 -c "import yaml; yaml.safe_load(open('indexing-manager.config.yaml'))"
 
 **Example (Correct):**
 ```yaml
-project: ahrqgov-drupal
+project: example-project
 memory_dir: .ai-memory
 endpoint: http://127.0.0.1:5000/api/handoff
 ```
 
 **Example (Incorrect):**
 ```yaml
-project ahrqgov-drupal  # Missing colon
+project example-project  # Missing colon
 memory_dir: .ai-memory
   endpoint: http://127.0.0.1:5000/api/handoff  # Wrong indentation
 ```

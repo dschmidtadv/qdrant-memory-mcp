@@ -152,10 +152,10 @@ Project-scoped configuration template. Copy to project root and customize:
 
 ```yaml
 # indexing-manager.config.yaml
-project: ahrqgov-drupal
+project: example-project
 memory_dir: .ai-memory
 endpoint: http://127.0.0.1:5000/api/handoff
-workspace_slug: ahrqgov-drupal
+workspace_slug: example-project
 file_extensions:
   - .md
   - .sh
@@ -198,15 +198,15 @@ python3 indexing-manager/scripts/batch_indexer.py
 #
 # 📁 Source Directory: .ai-memory
 # 🌐 Endpoint: http://127.0.0.1:5000/api/handoff
-# 🧠 Project: ahrqgov-drupal
+# 🧠 Project: example-project
 #
 # ✓ Endpoint validated: /api/handoff responding
 # ✓ Found 82 files
 #
 # Uploading (3 concurrent workers):
-#   [1/82] AHRQ_5XX_ERROR_DOCUMENTATION_INDEX.md ✓
-#   [2/82] AHRQ_5XX_ERROR_EXECUTIVE_SUMMARY.md ✓
-#   [3/82] AHRQ_5XX_ERROR_RCA_INVESTIGATION_PLAN.md ✓
+#   [1/82] INCIDENT_DOCUMENTATION_INDEX.md ✓
+#   [2/82] INCIDENT_EXECUTIVE_SUMMARY.md ✓
+#   [3/82] INCIDENT_RCA_INVESTIGATION_PLAN.md ✓
 #   ...
 #   [82/82] waf-extraction-script.sh ✓
 #
