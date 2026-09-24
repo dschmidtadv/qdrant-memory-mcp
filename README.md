@@ -942,7 +942,6 @@ Zoo Code v3.80.x searches these directories (in order):
 | `aws-iam-analysis` | IAM security review and compliance assessment |
 | `aws-infrastructure` | Terraform & CLI management with .env-based profiles |
 | `aws-lambda-management` | Lambda deployment, management, and monitoring |
-| `aws-ssm-connection` | SSM Session Manager for EC2/container operations |
 | `gitnexus` | Code intelligence: call graphs, blast radius, refactoring |
 | `indexing-manager` | Push/sync .ai-memory files to Qdrant or vector stores |
 | `jira-manager` | JIRA ticket management via CLI and API |
