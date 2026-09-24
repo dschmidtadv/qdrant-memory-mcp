@@ -68,7 +68,7 @@ Run these three steps, then synthesize before proceeding:
 
 If no role is active, use `"project overview and architecture"` as the query.
 
-For projects with an org namespace (e.g. `ahrq:drupal:ahrqgov`), also run:
+For projects with an org namespace (e.g. `acme:drupal:acmesite`), also run:
 - `recall_context(project="shared:registry", query="<ORG> relationship map")`
 - `recall_context(project="<ORG>:infra:drupal-deploy", query="PHP version Docker image")`
 
