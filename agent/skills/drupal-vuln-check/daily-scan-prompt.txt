@@ -1,5 +1,0 @@
-Run the drupal-vuln-check skill against ehc-drupal, ahrqgov-drupal, and pso-drupal (all under ~/apps), through Step 4 (dedup search) and the "existing ticket" half of Step 5 (post re-check comments on tickets that already cover a finding).
-
-DO NOT execute the "file a new ticket" branch of Step 5 for any finding that has no existing Jira ticket. Instead, for each such finding, write a clearly-formatted entry (project, package, CVE, severity, affected versions, advisory link, develop commit SHA) to a section titled "## New findings pending review" in your final output. These are candidates for a human to review and file manually, not to be created in Jira automatically.
-
-At the end, print a plain-text summary: which projects were scanned, how many total findings per project, how many already had tickets (and got a re-check comment), and how many are pending review as new. Keep the summary readable in a terminal, avoiding markdown tables that will not render well as plain text, though the "New findings pending review" section itself can use markdown since it will be saved to a .md file separately.
