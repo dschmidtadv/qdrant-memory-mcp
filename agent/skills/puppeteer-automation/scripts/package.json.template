@@ -1,7 +1,7 @@
 {
   "name": "puppeteer-automation-project",
   "version": "1.0.0",
-  "description": "Puppeteer automation testing suite based on AHRQ patterns",
+  "description": "Puppeteer automation testing suite",
   "main": "index.js",
   "scripts": {
     "test": "mocha test/*.js --timeout 60000",
@@ -39,11 +39,9 @@
     "automation",
     "testing",
     "web-scraping",
-    "browser-testing",
-    "ahrq",
-    "drupal"
+    "browser-testing"
   ],
-  "author": "AHRQ Development Team",
+  "author": "",
   "license": "MIT",
   "repository": {
     "type": "git",

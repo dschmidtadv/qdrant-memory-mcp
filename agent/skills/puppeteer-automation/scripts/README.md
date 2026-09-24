@@ -1,6 +1,6 @@
 # Puppeteer Automation Scripts
 
-This directory contains helper scripts and utilities for the Puppeteer Automation Skill, based on patterns identified in the AHRQ project.
+This directory contains helper scripts and utilities for the Puppeteer Automation Skill.
 
 ## Files Overview
 
@@ -88,10 +88,10 @@ await testFormSubmission({
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BASE_URL` | Base URL for testing | `https://www.ahrq.gov` |
+| `BASE_URL` | Base URL for testing | `https://example.com` |
 | `PUPPETEER_TIMEOUT` | Timeout in milliseconds | `30000` |
 | `PUPPETEER_EXECUTABLE_PATH` | Browser executable path | Auto-detected |
-| `WAF_BYPASS_TOKEN` | WAF bypass token for production | Required for AHRQ |
+| `WAF_BYPASS_TOKEN` | WAF bypass token for production | Required if testing behind a WAF |
 
 ## Browser Support
 
@@ -104,7 +104,7 @@ The scripts automatically handle browser executable paths for:
 
 ## Security Features
 
-- WAF bypass headers for production AHRQ testing
+- WAF bypass headers for production testing
 - Modern User-Agent strings to avoid bot detection
 - Configurable request interception for resource blocking
 - Environment-based security token management
