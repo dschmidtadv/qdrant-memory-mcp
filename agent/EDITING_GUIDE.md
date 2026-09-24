@@ -88,7 +88,7 @@ Update `agent/.env` with actual credentials:
 AWS_ACCESS_KEY=AKIAXXXXXXXXXXXXXXXX
 AWS_SECRET_KEY=xxxxREDACTEDxxxxxxxxxxxxxxxxxxxxxxxxxxx
 AWS_REGION=us-east-1
-AWS_PROFILE=riva-profile
+AWS_PROFILE=my-profile
 
 # New Feature
 NEW_FEATURE_API_KEY=actual-secret-key
@@ -260,7 +260,7 @@ AWS_ACCESS_KEY
 AWS_SECRET_KEY
 GEMINI_API_KEY
 LITELLM_BASE_URL
-RIVA_LITELLM_API_KEY
+LITELLM_API_KEY
 
 # ❌ AVOID - Vague or unclear
 KEY
