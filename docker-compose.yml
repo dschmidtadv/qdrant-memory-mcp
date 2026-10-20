@@ -1,0 +1,291 @@
+# ============================================================================
+# MCP Server Self-Healing Architecture - Docker Compose Configuration
+# ============================================================================
+# 
+# ARCHITECTURE OVERVIEW:
+# This compose file orchestrates 4 core services for the Qdrant Memory MCP:
+#   1. qdrant-local: Vector database for semantic search and embeddings
+#   2. ollama-local: Local LLM inference engine for embeddings
+#   3. prometheus: Metrics collection and time-series database
+#   4. grafana: Visualization and monitoring dashboards
+#
+# HEALTH MONITORING STRATEGY:
+# Docker healthchecks have been intentionally REMOVED in favor of external
+# monitoring via scripts/mcp-monitor.sh. This external monitor:
+#   - Polls each service every 30 seconds
+#   - Implements exponential backoff restart logic
+#   - Provides centralized health state tracking
+#   - Allows graceful degradation without container restarts
+#
+# RESTART POLICY:
+# All services use "restart: unless-stopped" to maintain availability across
+# Docker daemon restarts while allowing manual control via "docker stop".
+#
+# NETWORK ISOLATION:
+# Services communicate via the "qdrant-mcp-network" bridge network, which:
+#   - Isolates services from the host network
+#   - Enables DNS-based service discovery between containers
+#   - Allows inter-service communication on custom hostnames
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  qdrant-local:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-local
+    
+    # Restart Policy: Keeps service running across Docker daemon restarts.
+    # "unless-stopped" allows manual "docker stop" to take precedence.
+    restart: unless-stopped
+    
+    ports:
+      - "6333:6333"
+    
+    volumes:
+      # Data Persistence: qdrant_data volume persists the vector index across
+      # container restarts. This ensures embeddings and search indices survive
+      # container lifecycle events. Mounted at /qdrant/storage (Qdrant's default).
+      - ./qdrant_data:/qdrant/storage
+    
+    environment:
+      # QDRANT_PREFER_MMAP=true: Enables memory-mapped file I/O for the vector
+      # index. This improves performance with large datasets by allowing the OS
+      # to manage memory paging efficiently, reducing heap pressure and enabling
+      # index sizes larger than available RAM.
+      - QDRANT_PREFER_MMAP=true
+    
+    # Resource Limits & Reservations:
+    # Qdrant requires 4GB for the vector index to handle large-scale embeddings.
+    # mem_limit: Hard cap at 4GB prevents OOM kills from affecting other services.
+    # mem_reservation: Soft reservation of 2GB ensures Docker reserves capacity.
+    # cpus: 2.0 cores allocated for vector operations and search queries.
+    mem_limit: 4g
+    mem_reservation: 2g
+    cpus: 2.0
+    
+    # Network Configuration: Connects to qdrant-mcp-network bridge for DNS-based
+    # service discovery. Enables other containers to reach this service via
+    # hostname "qdrant-local" without exposing to host network.
+    networks:
+      - qdrant-mcp-network
+    
+    # Logging Configuration: JSON file driver with rotation to prevent disk bloat.
+    # Max 10MB per file, keep 3 rotated files = ~30MB total log storage.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health Monitoring: Docker healthcheck using bash TCP check to verify service availability
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  ollama-local:
+    image: ollama/ollama:latest
+    container_name: ollama-local
+    
+    # Restart Policy: Keeps service running across Docker daemon restarts.
+    # "unless-stopped" allows manual "docker stop" to take precedence.
+    restart: unless-stopped
+    
+    ports:
+      - "11434:11434"
+    
+    # Entrypoint: Custom initialization script that ensures the embedding model
+    # (nomic-embed-text:latest) is pulled before the service starts accepting requests.
+    # This prevents "model not found" errors when the MCP server attempts to generate embeddings.
+    entrypoint: /entrypoint-ollama.sh
+    
+    volumes:
+      # Data Persistence: ollama_data volume persists downloaded embedding models
+      # across container restarts. Mounted at /root/.ollama (Ollama's default).
+      # This avoids re-downloading large model files on every restart.
+      - ./ollama_data:/root/.ollama
+      
+      # Entrypoint Script: Custom initialization script mounted into the container
+      # to ensure embedding models are available on startup.
+      - ./mcp-server/docker-entrypoint-ollama.sh:/entrypoint-ollama.sh:ro
+    
+    # Resource Limits & Reservations:
+    # Ollama requires 2GB for embedding model inference (typically nomic-embed-text).
+    # mem_limit: Hard cap at 2GB prevents OOM kills from affecting other services.
+    # mem_reservation: Soft reservation of 1GB ensures Docker reserves capacity.
+    # cpus: 1.5 cores allocated for embedding generation and inference.
+    mem_limit: 2g
+    mem_reservation: 1g
+    cpus: 1.5
+    
+    # Network Configuration: Connects to qdrant-mcp-network bridge for DNS-based
+    # service discovery. Enables other containers to reach this service via
+    # hostname "ollama-local" without exposing to host network.
+    networks:
+      - qdrant-mcp-network
+    
+    # Logging Configuration: JSON file driver with rotation to prevent disk bloat.
+    # Max 10MB per file, keep 3 rotated files = ~30MB total log storage.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health Monitoring: Docker healthcheck using bash TCP check to verify service availability
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    
+    # Restart Policy: Keeps service running across Docker daemon restarts.
+    # "unless-stopped" allows manual "docker stop" to take precedence.
+    restart: unless-stopped
+    
+    ports:
+      - "9090:9090"
+    
+    volumes:
+      # Configuration Mount: prometheus.yml is mounted read-only (ro) to prevent
+      # accidental modifications from within the container. Prometheus reads this
+      # on startup to discover scrape targets (qdrant-local, ollama-local).
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      
+      # Data Persistence: prometheus_data volume persists time-series metrics
+      # across container restarts. This preserves historical metrics for trend
+      # analysis and alerting. Mounted at /prometheus (Prometheus default).
+      - prometheus_data:/prometheus
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # Retention: Keep 15 days of metrics history for trend analysis and debugging.
+      - '--storage.tsdb.retention.time=15d'
+      # Lifecycle API: Enables dynamic reload of configuration without restart.
+      - '--web.enable-lifecycle'
+    
+    # Network Configuration: Connects to qdrant-mcp-network bridge for DNS-based
+    # service discovery. Enables scraping of qdrant-local and ollama-local via
+    # container hostnames without exposing to host network.
+    networks:
+      - qdrant-mcp-network
+    
+    # Service Dependencies: Prometheus waits for qdrant-local and ollama-local
+    # to be in "running" state before starting. This ensures scrape targets are
+    # available when Prometheus begins its first scrape cycle.
+    depends_on:
+      - qdrant-local
+      - ollama-local
+    
+    # Logging Configuration: JSON file driver with rotation to prevent disk bloat.
+    # Max 10MB per file, keep 3 rotated files = ~30MB total log storage.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health Monitoring: External monitoring via scripts/mcp-monitor.sh
+    # (30s interval, exponential backoff). No Docker healthcheck configured.
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    
+    # Restart Policy: Keeps service running across Docker daemon restarts.
+    # "unless-stopped" allows manual "docker stop" to take precedence.
+    restart: unless-stopped
+    
+    ports:
+      # Port Mapping: Host port 3002 maps to container port 3000 to avoid conflicts
+      # with other services that might use port 3000.
+      - "3002:3000"
+    
+    volumes:
+      # Data Persistence: grafana_data volume persists dashboards, datasources,
+      # and user preferences across container restarts. Mounted at /var/lib/grafana
+      # (Grafana default). This preserves all custom configurations and visualizations.
+      - grafana_data:/var/lib/grafana
+      
+      # Provisioning Mount: Provisioning configs are mounted read-only (ro) to
+      # ensure datasources and dashboards are auto-configured on startup without
+      # risk of accidental modifications from within the container.
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      
+      # Dashboard Mount: Pre-built dashboards are mounted read-only (ro) for
+      # visualization of Qdrant and Ollama metrics. Enables version control of
+      # dashboard definitions in the repository.
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    
+    environment:
+      # Admin Password: Default credentials for initial Grafana access.
+      # IMPORTANT: Change this in production environments.
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      
+      # User Sign-Up: Disabled to prevent unauthorized user creation in this
+      # internal monitoring setup. Only admin can create users.
+      - GF_USERS_ALLOW_SIGN_UP=false
+      
+      # Default Dashboard: Automatically loads the Qdrant MCP overview dashboard
+      # on login, providing immediate visibility into system health and metrics.
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/qdrant-mcp-overview.json
+    
+    # Network Configuration: Connects to qdrant-mcp-network bridge for DNS-based
+    # service discovery. Enables Grafana to reach Prometheus via hostname
+    # "prometheus" without exposing to host network.
+    networks:
+      - qdrant-mcp-network
+    
+    # Service Dependencies: Grafana waits for Prometheus to be in "running" state
+    # before starting. This ensures the datasource is available when Grafana
+    # initializes its provisioning configuration.
+    depends_on:
+      - prometheus
+    
+    # Logging Configuration: JSON file driver with rotation to prevent disk bloat.
+    # Max 10MB per file, keep 3 rotated files = ~30MB total log storage.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health Monitoring: External monitoring via scripts/mcp-monitor.sh
+    # (30s interval, exponential backoff). No Docker healthcheck configured.
+
+# ============================================================================
+# VOLUMES: Named volumes for data persistence across container lifecycle
+# ============================================================================
+volumes:
+  # prometheus_data: Persists Prometheus time-series database (TSDB) with 15-day
+  # retention. Enables historical metrics analysis and trend detection.
+  prometheus_data:
+  
+  # grafana_data: Persists Grafana dashboards, datasources, users, and preferences.
+  # Ensures custom configurations survive container restarts and updates.
+  grafana_data:
+
+# ============================================================================
+# NETWORKS: Custom bridge network for service isolation and DNS discovery
+# ============================================================================
+networks:
+  # qdrant-mcp-network: Bridge network isolating services from host network.
+  # Enables DNS-based service discovery between containers using container names
+  # as hostnames (e.g., "qdrant-local", "ollama-local", "prometheus").
+  # This approach provides:
+  #   - Network isolation: Services not exposed to host network
+  #   - Service discovery: Containers reach each other via DNS hostnames
+  #   - Simplified configuration: No need for hardcoded IP addresses
+  #   - Security: Reduces attack surface by limiting network exposure
+  qdrant-mcp-network:
+    driver: bridge

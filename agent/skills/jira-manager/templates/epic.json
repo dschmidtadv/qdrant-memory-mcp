@@ -1,0 +1,7 @@
+{
+  "project": "${JIRA_PROJECT_KEY}",
+  "issuetype": "Epic",
+  "priority": "High",
+  "labels": ["automated", "epic"],
+  "fields": {}
+}

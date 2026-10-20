@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.qdrant.mcp-server</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>cd /Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp && export DOCKER_HOST=unix:///Users/dietrichgottfriedschmidt/.docker/run/docker.sock && docker compose up -d</string>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/logs/mcp-server.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/logs/mcp-server-error.log</string>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DOCKER_HOST</key>
+        <string>unix:///Users/dietrichgottfriedschmidt/.docker/run/docker.sock</string>
+    </dict>
+    
+    <key>StartInterval</key>
+    <integer>300</integer>
+    
+    <key>TimeOut</key>
+    <integer>120</integer>
+</dict>
+</plist>

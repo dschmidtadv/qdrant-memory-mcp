@@ -1,0 +1,43 @@
+# indexing-manager.config.yaml
+# Configuration template for indexing-manager skill
+# Copy this file to your project root and customize for your environment
+
+# Project identifier (used for metadata tagging)
+project: qdrant-memory-mcp
+
+# Directory containing files to index
+memory_dir: .ai-memory
+
+# Full URL of the indexing endpoint
+# Common endpoints:
+#   - http://localhost:3000/mcp (Qdrant MCP server - recommended)
+#   - http://127.0.0.1:5000/api/handoff (legacy local handoff service)
+#   - https://api.pinecone.io/v1/documents (Pinecone)
+endpoint: http://localhost:3000/mcp
+
+# Qdrant collection name (default: agent-memory)
+collection_name: agent-memory
+
+# File extensions to include in indexing
+# Only files matching these extensions will be uploaded
+file_extensions:
+  - .md
+  - .sh
+  - .py
+  - .json
+  - .yaml
+  - .yml
+
+# Number of concurrent upload workers
+# Higher values = faster uploads but more network load
+# Recommended: 1-5 depending on network and server capacity
+concurrency: 3
+
+# Maximum number of retry attempts per file
+# If a file fails to upload, it will be retried this many times
+retry_max: 3
+
+# Base for exponential backoff calculation
+# Wait time = retry_backoff_base ^ attempt_number
+# Example with base=2: 1s, 2s, 4s, 8s...
+retry_backoff_base: 2

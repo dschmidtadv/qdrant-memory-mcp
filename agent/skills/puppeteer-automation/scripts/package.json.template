@@ -1,0 +1,54 @@
+{
+  "name": "puppeteer-automation-project",
+  "version": "1.0.0",
+  "description": "Puppeteer automation testing suite",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/*.js --timeout 60000",
+    "test:chrome": "mocha test/*.js --timeout 60000 --grep 'chrome'",
+    "test:firefox": "mocha test/*.js --timeout 60000 --grep 'firefox'",
+    "test:headless": "HEADLESS=true mocha test/*.js --timeout 60000",
+    "test:headed": "HEADLESS=false mocha test/*.js --timeout 60000",
+    "test:desktop": "VIEWPORT=desktop1 mocha test/*.js --timeout 60000",
+    "test:mobile": "VIEWPORT=mobile mocha test/*.js --timeout 60000",
+    "test:responsive": "npm run test:desktop && npm run test:mobile",
+    "test:performance": "mocha test/*performance*.js --timeout 120000",
+    "test:accessibility": "mocha test/*accessibility*.js --timeout 60000",
+    "test:forms": "mocha test/*form*.js --timeout 60000",
+    "test:cross-browser": "npm-run-all test:chrome test:firefox",
+    "setup": "cp scripts/.env.template .env && npm install",
+    "screenshots": "SCREENSHOTS=true npm test",
+    "debug": "DEBUG=true HEADLESS=false npm test"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "dotenv": "^16.0.0",
+    "chai": "^4.3.0",
+    "mocha": "^10.0.0"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "puppeteer",
+    "automation",
+    "testing",
+    "web-scraping",
+    "browser-testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/puppeteer-automation"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/puppeteer-automation/issues"
+  },
+  "homepage": "https://github.com/your-org/puppeteer-automation#readme"
+}

@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MCP: Enable GitHub (git-ops mode)",
+      "type": "shell",
+      "command": "cp .roo/mcp-git-ops.json .roo/mcp.json && echo '✅ GitHub MCP server ENABLED for git-ops mode'",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "MCP: Disable GitHub (default mode)",
+      "type": "shell",
+      "command": "cp .roo/mcp-default.json .roo/mcp.json && echo '✅ GitHub MCP server DISABLED for default mode'",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "MCP: Show current config",
+      "type": "shell",
+      "command": "echo '📋 Current MCP config:' && head -5 .roo/mcp.json",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}

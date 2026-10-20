@@ -1,0 +1,35 @@
+# Environment Variables
+.env
+.env.local
+.env.*.local
+agent/.env
+agent/.env.local
+
+# VS Code / Zoo Code / Roo Code settings (contain live provider API keys)
+.vscode-settings/
+*.bak
+*.json.bak
+**/zoo-code-settings.json
+**/mcp_settings.json
+**/roo-code-settings*.json
+
+# IDE & Editor
+.claude/settings.local.json
+agent/skills/puppeteer-automation/scripts/.env
+agent/skills/**/.env
+agent/skills/**/scripts/.env
+
+# Build & Runtime
+**/dist/
+**/*.js.map
+**/__pycache__/
+qdrant_data/
+ollama_data/
+agent/roo-code-settings-resolved.json
+agent/roo-code-settings.json050126.json
+.ai-memory/
+.claude/skills/gitnexus/gitnexus-exploring/SKILL.md
+.codemap/
+agent/skills/synced/
+agent/skills/drupal-vuln-check/pending-tickets/
+_to_delete/

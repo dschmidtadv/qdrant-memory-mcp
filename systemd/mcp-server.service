@@ -1,0 +1,38 @@
+[Unit]
+Description=MCP Server with Qdrant Memory
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=dietrichgottfriedschmidt
+WorkingDirectory=/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp
+Environment="DOCKER_HOST=unix:///Users/dietrichgottfriedschmidt/.docker/run/docker.sock"
+Environment="TRANSPORT_MODE=http"
+Environment="QDRANT_URL=http://localhost:6333"
+Environment="NODE_ENV=production"
+Environment="LOG_LEVEL=info"
+
+# Start Docker services first
+ExecStartPre=/usr/local/bin/docker-compose up -d
+
+# Wait for Qdrant to be ready
+ExecStartPre=/bin/sleep 30
+
+# Start MCP Server
+ExecStart=/usr/local/bin/npm start
+ExecStop=/bin/kill -TERM $MAINPID
+
+# Auto-restart on failure
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mcp-server
+
+[Install]
+WantedBy=multi-user.target

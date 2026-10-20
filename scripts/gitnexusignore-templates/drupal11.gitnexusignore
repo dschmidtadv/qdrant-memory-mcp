@@ -1,0 +1,49 @@
+# GitNexus ignore rules - standard template for large Drupal 11 repos
+# Drupal core + contrib + vendor account for the large majority of PHP files
+# in these repos (10,000-11,000+ files in core alone) and are what push
+# GitNexus's call-graph resolution into OOM/hang territory on a full index.
+# Custom code (the part actually worth indexing) is a small fraction of the
+# total file count. Exclude core/contrib/vendor and index custom code only.
+#
+# Typical breakdown for a mid-size Drupal 11 site: core ~10,000-11,000 files,
+# contrib ~3,000-4,000, vendor ~8,000-14,000, custom code often under 150.
+# Adjust paths below if a repo's directory layout differs (check html/web/
+# vs a different docroot name before assuming this applies as-is).
+
+# === DRUPAL CORE & CONTRIB (managed by Composer, not hand-edited) ===
+html/web/core/
+html/web/modules/contrib/
+html/web/themes/contrib/
+html/web/profiles/contrib/
+
+# === VENDOR DEPENDENCIES ===
+html/vendor/
+html/web/vendor/
+vendor/
+
+# === NODE.JS DEPENDENCIES ===
+node_modules/
+puppeteer/node_modules/
+
+# === BUILD ARTIFACTS & GENERATED ===
+html/web/sites/default/files/
+html/web/sites/default/settings.local.php
+.build/
+dist/
+build/
+
+# === LARGE BINARY/COMPILED FILES ===
+*.phar
+*.jar
+*.zip
+*.gz
+
+# === LOCK FILES (bloat without value to call-graph analysis) ===
+composer.lock
+package-lock.json
+
+# === IDE & SYSTEM ===
+.vscode/
+.idea/
+.DS_Store
+*.log

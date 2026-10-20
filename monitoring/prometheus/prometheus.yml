@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'local'
+    project: 'qdrant-memory-mcp'
+
+rule_files:
+  - "alerts/*.yml"
+
+scrape_configs:
+  # Qdrant native metrics endpoint
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant-local:6333']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # MCP server custom metrics exporter (runs on host)
+  - job_name: 'mcp-server'
+    static_configs:
+      - targets: ['host.docker.internal:9091']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

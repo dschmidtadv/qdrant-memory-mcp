@@ -1,0 +1,7 @@
+{
+  "project": "${JIRA_PROJECT_KEY}",
+  "issuetype": "Story",
+  "priority": "Medium",
+  "labels": ["automated", "story"],
+  "fields": {}
+}

@@ -1,0 +1,222 @@
+{
+  "version": "2.0.0",
+  "description": "Deterministic Tool Filtering for MCP Servers - Phase 1 & 2 of Three-Brain Architecture",
+  "purpose": "Strip dangerous, noisy, and low-value tools from MCP servers to reduce context window pressure",
+  "lastUpdated": "2026-05-22",
+  "implementationStatus": {
+    "phase1": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-ecs": "ACTIVE - 10 tools registered",
+        "aws-cloudwatch": "BLOCKED - see knownBugs",
+        "aws-documentation": "BLOCKED - see knownBugs"
+      }
+    },
+    "phase2": {
+      "status": "IMPLEMENTED",
+      "pr": "https://github.com/dschmidtadv/qdrant-memory-mcp/pull/54",
+      "servers": {
+        "aws-lambda": "ACTIVE - 17 Lambda functions registered as individual tools",
+        "aws-iam": "BLOCKED - see knownBugs"
+      }
+    }
+  },
+  "knownBugs": {
+    "defs_schema_incompatibility": {
+      "issue": "https://github.com/dschmidtadv/qdrant-memory-mcp/issues/56",
+      "description": "@arvoretech/mcp-proxy v1.14.1 cannot register tools from servers whose ListToolsRequest response contains JSON Schema $defs references",
+      "affectedServers": ["aws-cloudwatch", "aws-documentation", "aws-iam"],
+      "errors": {
+        "aws-iam": "can't resolve reference #/$defs/IamUser from id #",
+        "aws-cloudwatch": "can't resolve reference #/$defs/LogGroupMetadata from id #",
+        "aws-documentation": "can't resolve reference #/$defs/SearchResult from id #"
+      },
+      "workaround": "None available in mcp-proxy v1.14.1 (latest). Awaiting upstream fix.",
+      "fixedIn": "TBD"
+    }
+  },
+  "filterRules": {
+    "github": {
+      "description": "GitHub MCP Server - Filter dangerous repository operations",
+      "dangerousTools": [
+        "delete_repository",
+        "fork_repository",
+        "create_repository",
+        "transfer_repository",
+        "archive_repository"
+      ],
+      "noisyTools": [
+        "search_code",
+        "search_repositories",
+        "search_users",
+        "get_me",
+        "get_teams",
+        "get_team_members"
+      ],
+      "lowValueTools": [
+        "get_label",
+        "get_tag",
+        "get_release_by_tag",
+        "get_latest_release",
+        "assign_copilot_to_issue",
+        "add_comment_to_pending_review",
+        "sub_issue_write",
+        "create_or_update_file",
+        "search_pull_requests"
+      ],
+      "rationale": "Keep only essential PR/issue/branch operations. Remove destructive ops, search noise, and low-value tools."
+    },
+    "codemap": {
+      "description": "Codemap MCP Server - Already filtered in mcp_settings.json",
+      "status": "ALREADY_FILTERED",
+      "disabledCount": 50,
+      "rationale": "Session management, backups, macros, routines, templates, labels, scripts, checklists, help already disabled"
+    },
+    "gitnexus": {
+      "description": "GitNexus MCP Server - No dangerous tools",
+      "status": "SAFE",
+      "rationale": "All tools are read-only analysis tools. No filtering needed."
+    },
+    "qdrant-memory": {
+      "description": "Qdrant Memory MCP Server - No dangerous tools",
+      "status": "SAFE",
+      "rationale": "Only memorize_context and recall_context. Both are safe semantic operations."
+    },
+    "aws-ecs": {
+      "description": "AWS ECS MCP Server - Phase 1 Core Observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "describe_clusters",
+        "describe_services",
+        "describe_tasks",
+        "describe_task_definition",
+        "list_clusters",
+        "list_services",
+        "list_tasks",
+        "list_task_definitions"
+      ],
+      "rationale": "Read-only ECS cluster, service, and task inspection. No mutation operations exposed."
+    },
+    "aws-cloudwatch": {
+      "description": "AWS CloudWatch MCP Server - Phase 1 Core Observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "get_metric_statistics",
+        "list_metrics",
+        "describe_alarms",
+        "get_log_events",
+        "describe_log_groups",
+        "describe_log_streams",
+        "filter_log_events"
+      ],
+      "rationale": "Read-only CloudWatch metrics, logs, and alarms. No mutation operations exposed."
+    },
+    "aws-documentation": {
+      "description": "AWS Documentation MCP Server - Phase 1 Core Observability",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "search_documentation",
+        "get_documentation"
+      ],
+      "rationale": "AWS service documentation search and retrieval for troubleshooting guidance."
+    },
+    "aws-lambda": {
+      "description": "AWS Lambda Tool MCP Server - Phase 2 Security & Compute (awslabs.lambda-tool-mcp-server)",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_functions",
+        "get_function",
+        "get_function_code_location",
+        "invoke_function",
+        "create_function",
+        "update_function_code",
+        "update_function_configuration",
+        "delete_function",
+        "list_layers",
+        "get_layer_version",
+        "publish_layer_version",
+        "delete_layer_version",
+        "list_aliases",
+        "create_alias",
+        "update_alias",
+        "delete_alias",
+        "get_policy",
+        "add_permission",
+        "remove_permission"
+      ],
+      "rationale": "Lambda function management, code deployment, layer management, and permission configuration. Includes both read and write operations for devops-engineer mode."
+    },
+    "aws-iam": {
+      "description": "AWS IAM MCP Server - Phase 2 Security & Compute",
+      "strategy": "ALLOWLIST_ONLY",
+      "allowedTools": [
+        "list_users",
+        "get_user",
+        "list_groups",
+        "get_group",
+        "list_roles",
+        "get_role",
+        "list_policies",
+        "get_policy",
+        "get_policy_version",
+        "list_policy_versions",
+        "list_user_policies",
+        "get_user_policy",
+        "list_group_policies",
+        "get_group_policy",
+        "list_role_policies",
+        "get_role_policy",
+        "list_attached_user_policies",
+        "list_attached_group_policies",
+        "list_attached_role_policies",
+        "get_role_trust_policy",
+        "simulate_principal_policy",
+        "simulate_custom_policy",
+        "list_access_keys",
+        "get_access_key_last_used",
+        "list_mfa_devices",
+        "list_virtual_mfa_devices"
+      ],
+      "rationale": "Read-only IAM policy analysis, role inspection, and permission simulation for security-review and cloud-architect modes. No mutation operations exposed."
+    }
+  },
+  "implementation": {
+    "strategy": "Extend mcp_settings.json with expanded disabledTools arrays",
+    "files": [
+      "$HOME/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (macOS)",
+      "$APPDATA/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (Windows)",
+      "$HOME/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json (Linux)"
+    ],
+    "note": "Replace $HOME/$APPDATA with your actual home directory. See agent/.env.example for configuration guidance.",
+    "steps": [
+      "1. Add dangerous tools to github.disabledTools",
+      "2. Add noisy tools to github.disabledTools",
+      "3. Add low-value tools to github.disabledTools",
+      "4. Verify no overlap with alwaysAllow list",
+      "5. Test tool availability after filtering",
+      "6. For aws-core: Configure allowlist in mcp_settings.json to expose ONLY listed tools",
+      "7. Verify aws-core mutation tools are blocked"
+    ]
+  },
+  "expectedOutcome": {
+    "baseline": "This file documents GitHub-server-only filtering plus AWS toolkit allowlist. For full system totals (all 5 MCP servers), see ROO_CODE_CONTEXT.md.",
+    "toolReduction": "GitHub server: ~60 → ~20 tools (67% reduction). AWS toolkit: ~150 → ~20 tools (87% reduction)",
+    "totalToolCount": "GitHub server only: ~72 → ~52 tools (28% reduction). AWS toolkit: ~150 → ~20 tools (87% reduction). Full system: 295 → 107 tools (64% reduction) — see ROO_CODE_CONTEXT.md.",
+    "safetyLevel": "CRITICAL - AWS toolkit mutation operations completely blocked",
+    "riskLevel": "MINIMAL - Only read-only observability and documentation retrieval exposed"
+  },
+  "verification": {
+    "checklist": [
+      "[ ] GitHub MCP server loads without errors",
+      "[ ] Dangerous tools (delete_repository, etc.) are not available",
+      "[ ] Core tools (list_issues, create_branch, push_files) still work",
+      "[ ] AWS toolkit loads with allowlist only",
+      "[ ] AWS mutation tools (run_instances, delete_db_instance, etc.) are blocked",
+      "[ ] AWS observability tools (describe_*, list_*, get_*) are available",
+      "[ ] search_documentation and retrieve_skill are available",
+      "[ ] No tool conflicts or duplicates",
+      "[ ] Tool count reduced as expected"
+    ]
+  }
+}
