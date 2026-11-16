@@ -27,17 +27,45 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 }
 
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS) || 30000;
+const OLLAMA_MAX_ATTEMPTS = Number(process.env.OLLAMA_MAX_ATTEMPTS) || 3;
+
+function describeError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const body = error.response?.data ? JSON.stringify(error.response.data).slice(0, 200) : '';
+    return [error.code, status && `HTTP ${status}`, body || error.message].filter(Boolean).join(' ');
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function getOllamaEmbedding(text: string): Promise<number[]> {
   const timer = embeddingDuration.startTimer({ provider: 'ollama' });
+  let lastError = '';
   try {
-    const response = await axios.post(`${OLLAMA_URL}/api/embeddings`, {
-      model: OLLAMA_MODEL,
-      prompt: text
-    });
-    return response.data.embedding;
-  } catch (error) {
-    console.error('Ollama embedding failed:', error);
-    throw new Error('Failed to generate embedding');
+    // Retry with backoff: the first call after startup can fail while Ollama
+    // loads the model or while many MCP servers start at once.
+    for (let attempt = 1; attempt <= OLLAMA_MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await axios.post(
+          `${OLLAMA_URL}/api/embeddings`,
+          { model: OLLAMA_MODEL, prompt: text },
+          { timeout: OLLAMA_TIMEOUT_MS }
+        );
+        const embedding = response.data?.embedding;
+        if (Array.isArray(embedding) && embedding.length > 0) {
+          return embedding;
+        }
+        lastError = `empty embedding in response: ${JSON.stringify(response.data).slice(0, 200)}`;
+      } catch (error) {
+        lastError = describeError(error);
+      }
+      console.error(`Ollama embedding attempt ${attempt}/${OLLAMA_MAX_ATTEMPTS} failed: ${lastError}`);
+      if (attempt < OLLAMA_MAX_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, 500 * 2 ** (attempt - 1)));
+      }
+    }
+    throw new Error(`Failed to generate embedding (Ollama ${OLLAMA_URL}, model ${OLLAMA_MODEL}): ${lastError}`);
   } finally {
     timer();
   }
