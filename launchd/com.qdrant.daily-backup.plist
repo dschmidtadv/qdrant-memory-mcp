@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.qdrant.daily-backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/scripts/qdrant-daily-backup.sh</string>
+    </array>
+    <!-- Run at 9 AM daily -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <!-- Also run on agent load (login/wake) if missed -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/logs/qdrant-backup-launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp/logs/qdrant-backup-launchd.err</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/dietrichgottfriedschmidt/apps/qdrant-memory-mcp</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/Library/Frameworks/Python.framework/Versions/3.12/bin</string>
+        <key>QDRANT_URL</key>
+        <string>http://localhost:6333</string>
+    </dict>
+</dict>
+</plist>

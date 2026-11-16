@@ -44,10 +44,11 @@ services:
       - "6333:6333"
     
     volumes:
-      # Data Persistence: qdrant_data volume persists the vector index across
-      # container restarts. This ensures embeddings and search indices survive
-      # container lifecycle events. Mounted at /qdrant/storage (Qdrant's default).
-      - ./qdrant_data:/qdrant/storage
+      # Data Persistence: Named volume persists the vector index across container
+      # restarts AND is isolated from git operations (git reset, git clean, etc.).
+      # CHANGED 2026-10-05: Switched from bind mount (./qdrant_data) to named volume
+      # to prevent data loss from git reset --hard. See incident report in Qdrant memory.
+      - qdrant_data:/qdrant/storage
     
     environment:
       # QDRANT_PREFER_MMAP=true: Enables memory-mapped file I/O for the vector
@@ -104,10 +105,10 @@ services:
     entrypoint: /entrypoint-ollama.sh
     
     volumes:
-      # Data Persistence: ollama_data volume persists downloaded embedding models
-      # across container restarts. Mounted at /root/.ollama (Ollama's default).
-      # This avoids re-downloading large model files on every restart.
-      - ./ollama_data:/root/.ollama
+      # Data Persistence: Named volume persists downloaded embedding models across
+      # container restarts AND is isolated from git operations.
+      # CHANGED 2026-10-05: Switched from bind mount (./ollama_data) to named volume.
+      - ollama_data:/root/.ollama
       
       # Entrypoint Script: Custom initialization script mounted into the container
       # to ensure embedding models are available on startup.
@@ -267,6 +268,16 @@ services:
 # VOLUMES: Named volumes for data persistence across container lifecycle
 # ============================================================================
 volumes:
+  # qdrant_data: Persists Qdrant vector database (collections, segments, WAL).
+  # Named volume isolates data from git operations — prevents accidental deletion
+  # via git reset/clean. Added 2026-10-05 after data loss incident.
+  qdrant_data:
+
+  # ollama_data: Persists downloaded embedding models (nomic-embed-text).
+  # Named volume prevents model re-download after git operations.
+  # Added 2026-10-05 after data loss incident.
+  ollama_data:
+
   # prometheus_data: Persists Prometheus time-series database (TSDB) with 15-day
   # retention. Enables historical metrics analysis and trend detection.
   prometheus_data:
