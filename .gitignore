@@ -32,4 +32,4 @@ agent/roo-code-settings.json050126.json
 .codemap/
 agent/skills/synced/
 agent/skills/drupal-vuln-check/pending-tickets/
-_to_delete/
+_to_delete/qdrant_backups/

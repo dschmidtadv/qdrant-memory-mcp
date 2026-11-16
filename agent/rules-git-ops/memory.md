@@ -61,6 +61,53 @@ Combine both sources before performing git operations.
 5. **Create Commit** → Write descriptive commit message
 6. **Push Changes** → Push to remote repository
 7. **Create PR** → Open pull request if needed
+8. **Address Review Comments** → Fix code in Code mode, then:
+   - Post explanatory reply comment: `gh pr comment <N> -b "..."`
+   - Resolve review threads via GraphQL (see PR REVIEW THREAD RESOLUTION below)
+
+## PR REVIEW THREAD RESOLUTION
+
+After addressing review comments with code changes, you MUST resolve the GitHub review threads.
+Posting a reply comment does NOT resolve threads — you must call the GraphQL mutation explicitly.
+
+### ⚠️ Critical: REST endpoint returns 404 — ALWAYS use GraphQL
+
+### Step 1: Fetch unresolved thread IDs
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "OWNER", name: "REPO") {
+      pullRequest(number: N) {
+        reviewThreads(first: 100) {
+          nodes { id isResolved }
+        }
+      }
+    }
+  }
+' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id'
+```
+
+### Step 2: Resolve each thread (return ONLY clientMutationId — no reviewThread fields)
+```bash
+for THREAD_ID in <IDs from step 1>; do
+  gh api graphql -f threadId="$THREAD_ID" -f query='
+    mutation($threadId: ID!) {
+      resolveReviewThread(input: {threadId: $threadId}) {
+        clientMutationId
+      }
+    }
+  ' | grep -q '"clientMutationId"' && echo "✓ $THREAD_ID" || echo "✗ $THREAD_ID"
+done
+```
+
+### Common Mistakes
+| Mistake | Fix |
+|---------|-----|
+| Using REST endpoint | Use GraphQL only (REST returns 404) |
+| `@phpstan-ignore-next-line` with explanatory lines between it and the target | Move ignore comment to be DIRECTLY above the target line |
+| Returning `reviewThread { ... }` from mutation | Return ONLY `clientMutationId` |
+
+Full workflow reference: `agent/skills/github-pr-review-resolution/SKILL.md`
 
 ## PROJECT NAME DETECTION
 
@@ -196,3 +243,95 @@ Total estimated token cost per incident: ~2,000-3,000 tokens (vs. 10,000+ for un
 - [ ] Incident response runbook updated with 4SV workflow
 - [ ] Team trained on 4SV protocol
 - [ ] Monitoring dashboard shows 4SV verification status
+
+## GITHUB PR REVIEW THREAD RESOLUTION
+
+### ✅ When To Use
+When a PR has multiple unresolved review threads that need to be marked as resolved after code fixes are applied.
+
+### ⚠️ Common Mistake
+REST endpoint `PUT /repos/.../pulls/comments/{id}/resolve` returns 404 — **use GraphQL only.**
+
+### ✅ Correct GraphQL Mutation
+```bash
+gh api graphql -f threadId="$THREAD_ID" -f query='
+  mutation($threadId: ID!) {
+    resolveReviewThread(input: {threadId: $threadId}) {
+      clientMutationId
+    }
+  }
+'
+```
+
+**Critical:** Return ONLY `clientMutationId`. Requesting `reviewThread { ... }` fails — field does not exist on `ResolveReviewThreadPayload`.
+
+### Step 1: Get All Unresolved Thread IDs
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "OWNER", name: "REPO") {
+      pullRequest(number: N) {
+        reviewThreads(first: 100) {
+          nodes { id isResolved }
+        }
+      }
+    }
+  }
+' | jq -r '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id'
+```
+
+### Step 2: Batch Resolve Loop
+```bash
+# Write thread IDs to file, then pipe through
+while read -r THREAD_ID; do
+  gh api graphql -f threadId="$THREAD_ID" -f query='
+    mutation($threadId: ID!) {
+      resolveReviewThread(input: {threadId: $threadId}) {
+        clientMutationId
+      }
+    }
+  ' 2>&1 | grep -q '"clientMutationId"' && echo "✓ $THREAD_ID" || echo "✗ $THREAD_ID"
+done < threads.txt
+```
+
+### Step 3: Verify All Resolved
+```bash
+# Query again — should return empty list
+gh api graphql -f query='
+  query {
+    repository(owner: "OWNER", name: "REPO") {
+      pullRequest(number: N) {
+        reviewThreads(first: 100) {
+          nodes { id isResolved }
+        }
+      }
+    }
+  }
+' | jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
+```
+
+Empty output = all threads resolved.
+
+### Real-World Example
+Resolved 44 unresolved PR #68 threads after code fixes in one batch:
+```
+Summary: 44 resolved, 0 failed out of 44 total
+```
+
+### Batch Resolution Script Template
+Store thread IDs in bash array, loop with `gh api graphql`, count successes/failures:
+```bash
+THREAD_IDS=(...)
+RESOLVED=0
+FAILED=0
+
+for THREAD_ID in "${THREAD_IDS[@]}"; do
+  if gh api graphql -f threadId="$THREAD_ID" ... | grep -q '"clientMutationId"'; then
+    ((RESOLVED++))
+  else
+    ((FAILED++))
+  fi
+done
+
+echo "Summary: $RESOLVED resolved, $FAILED failed out of ${#THREAD_IDS[@]} total"
+```
